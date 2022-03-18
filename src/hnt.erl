@@ -107,6 +107,8 @@ handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
             %% pending payouts
             L2 = maps:get(From, NewState#state.l2s),
             %% apply the payments and the burns to the l2 contract's address
+            %% Note that the burn could actually go back into some pre-mined amount
+            %% or could be tracked for "contuining emissions" once HNT is "fully mined"
             NewHNTHolders = credit(From, L2#l2.pending_payouts, debit(From, Burns, NewState#state.hnt_holders)),
             {reply, {ok, L2#l2.nonce, L2#l2.pending_payouts}, NewState#state{hnt_holders=NewHNTHolders, last_update=Now, l2s = maps:put(From, L2#l2{pending_payouts=0, power=NewPower, nonce=L2#l2.nonce + 1}, NewState#state.l2s)}}
     end.
