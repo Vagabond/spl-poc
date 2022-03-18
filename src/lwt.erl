@@ -27,8 +27,8 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-transfer(_Payer, _Payee, _Amount) ->
-    todo.
+transfer(Payer, Payee, Amount) ->
+    gen_server:call(?MODULE, {transfer, Payer, Payee, Amount}, infinity).
 
 convert_to_hnt(Payer, Amount) ->
     %% essentially we destroy some LWT and then send some of the HNT this contract
@@ -58,6 +58,17 @@ handle_info(_Any, State) ->
 handle_cast(_Any, State) ->
     {noreply, State}.
 
+handle_call({transfer, Payer, Payee, Amt}, _From, State) when Amt > 0 ->
+    PayerHolding = maps:get(Payer, State#state.holders, 0),
+
+    case PayerHolding =< Amt of
+        %% cannot zero out payer on transfer
+        true ->
+            throw({reply, {error, insufficient_transfer_balance}, State});
+        false ->
+            NewHolders = credit(Payee, Amt, debit(Payer, Amt, State#state.holders)),
+            {reply, ok, State#state{holders = NewHolders}}
+    end;
 handle_call({convert, Payer, Amount}, _From, State) ->
     case maps:get(Payer, State#state.holders, 0) >= Amount of
         false ->
