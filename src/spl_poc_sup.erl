@@ -41,9 +41,11 @@ init([]) ->
         period => 1
     },
 
-    ChildSpecs = [ ?WORKER(po, price_oracle, []),
-                   ?WORKER(hnt, hnt, [ #{}, #{} ])
-                 ],
+    ChildSpecs = [
+        ?WORKER(po, price_oracle, []),
+        ?WORKER(hnt, hnt, [#{}, #{}]),
+        ?WORKER(lwt, lwt, [])
+    ],
 
     {ok, {SupFlags, ChildSpecs}}.
 
