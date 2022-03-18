@@ -47,7 +47,8 @@ init([]) ->
             #{eric => 10, stan => 20},
             #{lwt => 1000}
         ]),
-        ?WORKER(lwt, lwt, [])
+        ?WORKER(lwt, lwt, []),
+        ?WORKER(lwt_chain, lwt_chain, [#{tall_blonde_condor => andrew}])
     ],
 
     {ok, {SupFlags, ChildSpecs}}.

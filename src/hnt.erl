@@ -37,7 +37,7 @@
 ]).
 
 -export([
-    update_from_l2/3
+    update_from_l2/4
 ]).
 
 %% how many HNT per millisecond
@@ -56,8 +56,8 @@ transfer_security(Payer, Payee, Amount) ->
 transfer_hnt(Payer, Payee, Amount) ->
     gen_server:call(?MODULE, {transfer_hnt, Payer, Payee, Amount}, infinity).
 
-update_from_l2(From, NewPower, Burns) ->
-    gen_server:call(?MODULE, {update, From, NewPower, Burns}).
+update_from_l2(From, Nonce, NewPower, Burns) ->
+    gen_server:call(?MODULE, {update, From, Nonce, NewPower, Burns}).
 
 init([SecurityHolders, HNTHolders, L2s]) ->
     L2Recs = maps:map(
@@ -128,8 +128,10 @@ handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
             %% apply the payments and the burns to the l2 contract's address
             %% Note that the burn could actually go back into some pre-mined amount
             %% or could be tracked for "contuining emissions" once HNT is "fully mined"
-            NewHNTHolders = credit(
-                From, L2#l2.pending_payouts, debit(From, Burns, NewState#state.hnt_holders)
+            NewHNTHolders = debit(From, Burns,
+                                  credit(
+                From, L2#l2.pending_payouts,
+                 NewState#state.hnt_holders)
             ),
             {reply, {ok, L2#l2.pending_payouts}, NewState#state{
                 hnt_holders = NewHNTHolders,

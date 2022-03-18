@@ -46,8 +46,8 @@ oracle() ->
     %% but we can simply select the longest common prefix
     gen_server:call(?MODULE, oracle, infinity).
 
-update_from_chain(Nonce, _OpCount, RewardShares, Power) ->
-    gen_server:call(?MODULE, {update, Nonce, RewardShares, Power}, infinity).
+update_from_chain(Nonce, OpCount, RewardShares, Power) ->
+    gen_server:call(?MODULE, {update, Nonce, OpCount, RewardShares, Power}, infinity).
 
 init([]) ->
     {ok, #state{}}.
@@ -104,7 +104,7 @@ handle_call(
     _From,
     State = #state{nonce = Nonce, pending_operations = Ops}
 ) ->
-    {ok, HNT} = hnt:update_from_l2(?MODULE, Power, State#state.burns),
+    {ok, HNT} = hnt:update_from_l2(?MODULE, Nonce, Power, State#state.burns),
     %% ok, we got some HNT, now we need to convert that to LWT and disburse it according to the reward shares
     LWT = HNT * ?ExchangeRate,
     TotalShares = maps:fold(
@@ -122,11 +122,17 @@ handle_call(
         State#state.holders,
         RewardShares
     ),
+    NewOps = case length(Ops) == 0 andalso OpCount == 0 of
+                 true ->
+                     [];
+                 false ->
+                     lists:sublist(Ops, OpCount, length(Ops))
+             end,
     %% Now we need to remove the first `OpCount' operations from our pending operations stack, zero out our burns
     %% and increment our nonce
     {reply, ok, State#state{
         nonce = Nonce + 1,
-        pending_operations = lists:sublist(Ops, OpCount, length(Ops)),
+        pending_operations = NewOps,
         burns = 0,
         holders = NewHolders
     }}.
