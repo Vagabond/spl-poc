@@ -18,7 +18,9 @@
 
 -export([transfer/3, convert_to_hnt/2, burn_to_dc/3]).
 
--export([oracle/0, update_from_chain/3]).
+-export([oracle/0, update_from_chain/4]).
+
+%% TODO staking/unstaking validators, ugh
 
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -40,9 +42,9 @@ oracle() ->
     %% get the nonce and the l2 pending operations stack
     %% multiple attempts at oracling may give longer lists of pending operations
     %% but we can simply select the longest common prefix
-    todo.
+    gen_server:call(?MODULE, oracle, infinity).
 
-update_from_chain(Nonce, RewardShares, Power) ->
+update_from_chain(Nonce, OpCount, RewardShares, Power) ->
     gen_server:call(?MODULE, {update, Nonce, RewardShares, Power}, infinity).
 
 
@@ -79,7 +81,23 @@ handle_call({burn, Burner, Burnee, Amount}, _From, State) ->
     {ok, Price} = price_oracle:get_price(),
     %% TODO I forget the math to calculate DC here, fix it later
     DC = HNT * Price,
-    {reply, ok, State#state{pending_operations=State#state.pending_operations ++ [{dc, Burnee, DC}], burns = State#state.burns + HNT}}.
+    {reply, ok, State#state{pending_operations=State#state.pending_operations ++ [{dc, Burnee, DC}], burns = State#state.burns + HNT}};
+handle_call(oracle, _From, State) ->
+    {reply, {ok, {State#state.nonce, State#state.pending_operations}}, State};
+handle_call({update, Nonce, OpCount, RewardShares, Power}, _From, State = #state{nonce=Nonce, pending_operations=Ops}) ->
+    {ok, HNT} = hnt:update_from_l2(?MODULE, Power, State#state.burns),
+    %% ok, we got some HNT, now we need to convert that to LWT and disburse it according to the reward shares
+    LWT = HNT * ?ExchangeRate,
+    TotalShares = maps:fold(fun(_K, V, Acc) ->
+                                    Acc + V
+                            end, 0, RewardShares),
+    RewardShare = LWT / TotalShares,
+    NewHolders = maps:fold(fun(K, V, Acc) ->
+                                   credit(K, trunc(V * RewardShare), Acc)
+                           end, State#state.holders, RewardShares),
+    %% Now we need to remove the first `OpCount' operations from our pending operations stack, zero out our burns
+    %% and increment our nonce
+    {reply, ok, State#state{nonce=Nonce + 1, pending_operations=lists:sublist(Ops, OpCount, length(Ops)), burns=0, holders=NewHolders}}.
 
 debit(Key, Amount, Map) ->
     maps:update_with(Key, fun(V) -> V - Amount end, Map).
