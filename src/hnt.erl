@@ -27,7 +27,7 @@
 
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3]).
 
--export([start_link/2]).
+-export([start_link/3]).
 
 -export([
     transfer_security/3,
@@ -47,8 +47,8 @@
 %% how many total security tokens can ever exist
 -define(SecurityCount, 100).
 
-start_link(SecurityHolders, L2s) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [SecurityHolders, L2s], []).
+start_link(SecurityHolders, HNTHolders, L2s) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [SecurityHolders, HNTHolders, L2s], []).
 
 transfer_security(Payer, Payee, Amount) ->
     gen_server:call(?MODULE, {transfer_security, Payer, Payee, Amount}, infinity).
@@ -59,8 +59,15 @@ transfer_hnt(Payer, Payee, Amount) ->
 update_from_l2(From, NewPower, Burns) ->
     gen_server:call(?MODULE, {update, From, NewPower, Burns}).
 
-init([SecurityHolders, L2s]) ->
-    {ok, #state{security_holders = SecurityHolders, l2s = L2s}}.
+init([SecurityHolders, HNTHolders, L2s]) ->
+    L2Recs = maps:map(
+        fun(_K, V) ->
+            #l2{exchange_rate = V}
+        end,
+        L2s
+    ),
+
+    {ok, #state{security_holders = SecurityHolders, hnt_holders = HNTHolders, l2s = L2Recs}}.
 
 handle_info(_Any, State) ->
     {noreply, State}.

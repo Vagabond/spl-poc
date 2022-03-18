@@ -40,10 +40,13 @@ init([]) ->
         intensity => 0,
         period => 1
     },
-
     ChildSpecs = [
         ?WORKER(po, price_oracle, []),
-        ?WORKER(hnt, hnt, [#{}, #{}]),
+        ?WORKER(hnt, hnt, [
+            #{kenny => 20, kyle => 80},
+            #{eric => 10, stan => 20},
+            #{lwt => 1000}
+        ]),
         ?WORKER(lwt, lwt, [])
     ],
 
