@@ -6,37 +6,46 @@
 -behaviour(gen_server).
 
 -record(l2, {
-          exchange_rate,
-          nonce = 0,
-          power = 1, %% how much share should it get
-          pending_payouts = 0 %% how much we have to pay out since this l2 last updated
-         }).
+    exchange_rate,
+    nonce = 0,
+    %% how much share should it get
+    power = 1,
+    %% how much we have to pay out since this l2 last updated
+    pending_payouts = 0
+}).
 
 -record(state, {
-          security_holders = #{}, %% security token payout table
-          hnt_holders = #{}, %% who is holding HNT, includes contract addresses
-          l2s = #{}, %% map of l2s and their conversion rate/last update time
-          last_update = erlang:monotonic_time(millisecond) %% whenever any l2 last updated us, used for tracking emissions
-         }).
+    %% security token payout table
+    security_holders = #{},
+    %% who is holding HNT, includes contract addresses
+    hnt_holders = #{},
+    %% map of l2s and their conversion rate/last update time
+    l2s = #{},
+    %% whenever any l2 last updated us, used for tracking emissions
+    last_update = erlang:monotonic_time(millisecond)
+}).
 
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3]).
 
 -export([start_link/2]).
 
 -export([
-         transfer_security/3,
-         transfer_hnt/3
-         %get_hnt_balance/1,
-         %get_security_balance/1
-        ]).
+    transfer_security/3,
+    transfer_hnt/3
+    %get_hnt_balance/1,
+    %get_security_balance/1
+]).
 
 -export([
-         update_from_l2/3
-        ]).
+    update_from_l2/3
+]).
 
--define(EmissionRate, 0.001). %% how many HNT per millisecond
--define(SecurityPercent, 0.35). %% security tokens reward %
--define(SecurityCount, 100). %% how many total security tokens can ever exist
+%% how many HNT per millisecond
+-define(EmissionRate, 0.001).
+%% security tokens reward %
+-define(SecurityPercent, 0.35).
+%% how many total security tokens can ever exist
+-define(SecurityCount, 100).
 
 start_link(SecurityHolders, L2s) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [SecurityHolders, L2s], []).
@@ -51,7 +60,7 @@ update_from_l2(From, NewPower, Burns) ->
     gen_server:call(?MODULE, {update, From, NewPower, Burns}).
 
 init([SecurityHolders, L2s]) ->
-    {ok, #state{security_holders=SecurityHolders, l2s=L2s}}.
+    {ok, #state{security_holders = SecurityHolders, l2s = L2s}}.
 
 handle_info(_Any, State) ->
     {noreply, State}.
@@ -59,23 +68,26 @@ handle_info(_Any, State) ->
 handle_cast(_Any, State) ->
     {noreply, State}.
 
-handle_call({transfer_security, Payer, Payee, Amount}, _From, State = #state{security_holders=SecurityHolders}) ->
+handle_call(
+    {transfer_security, Payer, Payee, Amount},
+    _From,
+    State = #state{security_holders = SecurityHolders}
+) ->
     case maps:get(Payer, SecurityHolders, 0) of
         Balance when Balance >= Amount ->
             NewSecurityHolders = credit(Payee, Amount, debit(Payer, Amount, SecurityHolders)),
-            {reply, ok, State#state{security_holders=NewSecurityHolders}};
+            {reply, ok, State#state{security_holders = NewSecurityHolders}};
         _ ->
             {reply, {error, insufficient_balance}, State}
     end;
-handle_call({transfer_hnt, Payer, Payee, Amount}, _From, State = #state{hnt_holders=HNTHolders}) ->
+handle_call({transfer_hnt, Payer, Payee, Amount}, _From, State = #state{hnt_holders = HNTHolders}) ->
     case maps:get(Payer, HNTHolders, 0) of
         Balance when Balance >= Amount ->
             NewHNTHolders = credit(Payee, Amount, debit(Payer, Amount, HNTHolders)),
-            {reply, ok, State#state{hnt_holders=NewHNTHolders}};
+            {reply, ok, State#state{hnt_holders = NewHNTHolders}};
         _ ->
             {reply, {error, insufficient_balance}, State}
     end;
-
 handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
     %% so we have to do a bunch of stuff here
     %% * we have to compute how long it's been since the last
@@ -90,7 +102,7 @@ handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
     case maps:find(From, State#state.l2s) of
         error ->
             throw({reply, {error, unknown_l2}, State});
-        {ok, #l2{nonce=N}} when Nonce /= N ->
+        {ok, #l2{nonce = N}} when Nonce /= N ->
             throw({reply, {error, bad_l2_nonce}, State});
         {ok, _} ->
             %% make sure the amount to burn is less than we hold
@@ -109,10 +121,19 @@ handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
             %% apply the payments and the burns to the l2 contract's address
             %% Note that the burn could actually go back into some pre-mined amount
             %% or could be tracked for "contuining emissions" once HNT is "fully mined"
-            NewHNTHolders = credit(From, L2#l2.pending_payouts, debit(From, Burns, NewState#state.hnt_holders)),
-            {reply, {ok, L2#l2.pending_payouts}, NewState#state{hnt_holders=NewHNTHolders, last_update=Now, l2s = maps:put(From, L2#l2{pending_payouts=0, power=NewPower, nonce=L2#l2.nonce + 1}, NewState#state.l2s)}}
+            NewHNTHolders = credit(
+                From, L2#l2.pending_payouts, debit(From, Burns, NewState#state.hnt_holders)
+            ),
+            {reply, {ok, L2#l2.pending_payouts}, NewState#state{
+                hnt_holders = NewHNTHolders,
+                last_update = Now,
+                l2s = maps:put(
+                    From,
+                    L2#l2{pending_payouts = 0, power = NewPower, nonce = L2#l2.nonce + 1},
+                    NewState#state.l2s
+                )
+            }}
     end.
-
 
 debit(Key, Amount, Map) ->
     maps:update_with(Key, fun(V) -> V - Amount end, Map).
@@ -126,15 +147,26 @@ emit(Elapsed, State) ->
     L2Amount = TotalToEmit - SecurityAmount,
     SecurityShare = SecurityAmount div ?SecurityCount,
     %% pay out security dividends
-    NewHNTHolders = maps:fold(fun(K, V, Acc) ->
-                       credit(K, V * SecurityShare, Acc)
-               end, State#state.hnt_holders, State#state.security_holders),
+    NewHNTHolders = maps:fold(
+        fun(K, V, Acc) ->
+            credit(K, V * SecurityShare, Acc)
+        end,
+        State#state.hnt_holders,
+        State#state.security_holders
+    ),
     %% pay out l2 contracts
-    PowerSum = maps:fold(fun(_K, V, Acc) ->
-                                  Acc + V#l2.power
-                          end, 0, State#state.l2s),
+    PowerSum = maps:fold(
+        fun(_K, V, Acc) ->
+            Acc + V#l2.power
+        end,
+        0,
+        State#state.l2s
+    ),
     L2Share = L2Amount div PowerSum,
-    NewL2s = maps:map(fun(_K, V = #l2{pending_payouts=Pending, power=Power}) ->
-                              V#l2{pending_payouts = Pending + (Power * L2Share)}
-                      end, State#state.l2s),
-    State#state{l2s=NewL2s, hnt_holders=NewHNTHolders}.
+    NewL2s = maps:map(
+        fun(_K, V = #l2{pending_payouts = Pending, power = Power}) ->
+            V#l2{pending_payouts = Pending + (Power * L2Share)}
+        end,
+        State#state.l2s
+    ),
+    State#state{l2s = NewL2s, hnt_holders = NewHNTHolders}.

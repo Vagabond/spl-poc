@@ -21,7 +21,7 @@ set_price(Price) ->
     gen_server:call(?MODULE, {set_price, Price}, infinity).
 
 init([]) ->
-    {ok, #state{price=100}}.
+    {ok, #state{price = 100}}.
 
 handle_info(_Any, State) ->
     {noreply, State}.
@@ -32,4 +32,4 @@ handle_cast(_Any, State) ->
 handle_call(get_price, _From, State) ->
     {reply, {ok, State#state.price}, State};
 handle_call({set_price, Price}, _From, State) ->
-    {reply, ok, State#state{price=Price}}.
+    {reply, ok, State#state{price = Price}}.

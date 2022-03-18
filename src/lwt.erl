@@ -2,15 +2,17 @@
 
 -behaviour(gen_server).
 
--define(ExchangeRate, 1000). %% HNT to LWT, does not change
+%% HNT to LWT, does not change
+-define(ExchangeRate, 1000).
 
 -record(state, {
-          nonce = 0,
-          holders = #{},
-          burns = 0, %% pending amount of HNT that needs to be destroyed
-          pending_operations = [] %% some stack of pending operations we need to do to the l2
-         }).
-
+    nonce = 0,
+    holders = #{},
+    %% pending amount of HNT that needs to be destroyed
+    burns = 0,
+    %% some stack of pending operations we need to do to the l2
+    pending_operations = []
+}).
 
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3]).
 
@@ -25,7 +27,7 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-transfer(Payer, Payee, Amount) ->
+transfer(_Payer, _Payee, _Amount) ->
     todo.
 
 convert_to_hnt(Payer, Amount) ->
@@ -44,9 +46,8 @@ oracle() ->
     %% but we can simply select the longest common prefix
     gen_server:call(?MODULE, oracle, infinity).
 
-update_from_chain(Nonce, OpCount, RewardShares, Power) ->
+update_from_chain(Nonce, _OpCount, RewardShares, Power) ->
     gen_server:call(?MODULE, {update, Nonce, RewardShares, Power}, infinity).
-
 
 init([]) ->
     {ok, #state{}}.
@@ -66,8 +67,8 @@ handle_call({convert, Payer, Amount}, _From, State) ->
     end,
     NewHolders = debit(Payer, Amount, State#state.holders),
     %% module is a lazy identifier for this contract, would be a pubkey normally
-    ok = hnt:transfer_hnt(?MODULE, Payer, Amount  div ?ExchangeRate),
-    {reply, ok, State#state{holders=NewHolders}};
+    ok = hnt:transfer_hnt(?MODULE, Payer, Amount div ?ExchangeRate),
+    {reply, ok, State#state{holders = NewHolders}};
 handle_call({burn, Burner, Burnee, Amount}, _From, State) ->
     case maps:get(Burner, State#state.holders, 0) >= Amount of
         false ->
@@ -81,27 +82,46 @@ handle_call({burn, Burner, Burnee, Amount}, _From, State) ->
     {ok, Price} = price_oracle:get_price(),
     %% TODO I forget the math to calculate DC here, fix it later
     DC = HNT * Price,
-    {reply, ok, State#state{pending_operations=State#state.pending_operations ++ [{dc, Burnee, DC}], burns = State#state.burns + HNT}};
+    {reply, ok, State#state{
+        pending_operations = State#state.pending_operations ++ [{dc, Burnee, DC}],
+        burns = State#state.burns + HNT
+    }};
 handle_call(oracle, _From, State) ->
     {reply, {ok, {State#state.nonce, State#state.pending_operations}}, State};
-handle_call({update, Nonce, OpCount, RewardShares, Power}, _From, State = #state{nonce=Nonce, pending_operations=Ops}) ->
+handle_call(
+    {update, Nonce, OpCount, RewardShares, Power},
+    _From,
+    State = #state{nonce = Nonce, pending_operations = Ops}
+) ->
     {ok, HNT} = hnt:update_from_l2(?MODULE, Power, State#state.burns),
     %% ok, we got some HNT, now we need to convert that to LWT and disburse it according to the reward shares
     LWT = HNT * ?ExchangeRate,
-    TotalShares = maps:fold(fun(_K, V, Acc) ->
-                                    Acc + V
-                            end, 0, RewardShares),
+    TotalShares = maps:fold(
+        fun(_K, V, Acc) ->
+            Acc + V
+        end,
+        0,
+        RewardShares
+    ),
     RewardShare = LWT / TotalShares,
-    NewHolders = maps:fold(fun(K, V, Acc) ->
-                                   credit(K, trunc(V * RewardShare), Acc)
-                           end, State#state.holders, RewardShares),
+    NewHolders = maps:fold(
+        fun(K, V, Acc) ->
+            credit(K, trunc(V * RewardShare), Acc)
+        end,
+        State#state.holders,
+        RewardShares
+    ),
     %% Now we need to remove the first `OpCount' operations from our pending operations stack, zero out our burns
     %% and increment our nonce
-    {reply, ok, State#state{nonce=Nonce + 1, pending_operations=lists:sublist(Ops, OpCount, length(Ops)), burns=0, holders=NewHolders}}.
+    {reply, ok, State#state{
+        nonce = Nonce + 1,
+        pending_operations = lists:sublist(Ops, OpCount, length(Ops)),
+        burns = 0,
+        holders = NewHolders
+    }}.
 
 debit(Key, Amount, Map) ->
     maps:update_with(Key, fun(V) -> V - Amount end, Map).
 
 credit(Key, Amount, Map) ->
     maps:update_with(Key, fun(V) -> V + Amount end, Amount, Map).
-
