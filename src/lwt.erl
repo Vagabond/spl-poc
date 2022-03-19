@@ -122,17 +122,11 @@ handle_call(
         State#state.holders,
         RewardShares
     ),
-    NewOps = case length(Ops) == 0 andalso OpCount == 0 of
-                 true ->
-                     [];
-                 false ->
-                     lists:sublist(Ops, OpCount, length(Ops))
-             end,
     %% Now we need to remove the first `OpCount' operations from our pending operations stack, zero out our burns
     %% and increment our nonce
     {reply, ok, State#state{
         nonce = Nonce + 1,
-        pending_operations = NewOps,
+        pending_operations = lists:sublist(Ops, OpCount + 1, length(Ops)),
         burns = 0,
         holders = NewHolders
     }}.

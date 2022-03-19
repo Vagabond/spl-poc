@@ -17,7 +17,7 @@
           pending_rewards = #{} %% account => reward share
          }).
 
--define(HotspotAddFee, 2000).
+-define(HotspotAddFee, 100).
 
 add_hotspot(Payer, HotspotAddress) ->
     gen_server:call(?MODULE, {add_hotspot, Payer, HotspotAddress}, infinity).
