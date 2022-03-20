@@ -5,7 +5,8 @@
     {mod, {spl_poc_app, []}},
     {applications, [
         kernel,
-        stdlib
+        stdlib,
+        lager
     ]},
     {env, []},
     {modules, []},

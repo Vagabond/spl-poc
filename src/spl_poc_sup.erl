@@ -48,7 +48,8 @@ init([]) ->
             #{lwt => 1000}
         ]),
         ?WORKER(lwt, lwt, []),
-        ?WORKER(lwt_chain, lwt_chain, [#{tall_blonde_condor => andrew}])
+        ?WORKER(lwt_chain, lwt_chain, [#{tall_blonde_condor => andrew}]),
+        ?WORKER(periodic_hotspot, periodic_hotspot, [])
     ],
 
     {ok, {SupFlags, ChildSpecs}}.

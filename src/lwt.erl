@@ -104,6 +104,7 @@ handle_call(
     _From,
     State = #state{nonce = Nonce, pending_operations = Ops}
 ) ->
+    lager:info("LWT got an update msg, Current Holders: ~p", [State#state.holders]),
     {ok, HNT} = hnt:update_from_l2(?MODULE, Nonce, Power, State#state.burns),
     %% ok, we got some HNT, now we need to convert that to LWT and disburse it according to the reward shares
     LWT = HNT * ?ExchangeRate,
@@ -122,6 +123,7 @@ handle_call(
         State#state.holders,
         RewardShares
     ),
+    lager:info("New Holders: ~p", [NewHolders]),
     %% Now we need to remove the first `OpCount' operations from our pending operations stack, zero out our burns
     %% and increment our nonce
     {reply, ok, State#state{

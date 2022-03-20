@@ -128,10 +128,14 @@ handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
             %% apply the payments and the burns to the l2 contract's address
             %% Note that the burn could actually go back into some pre-mined amount
             %% or could be tracked for "contuining emissions" once HNT is "fully mined"
-            NewHNTHolders = debit(From, Burns,
-                                  credit(
-                From, L2#l2.pending_payouts,
-                 NewState#state.hnt_holders)
+            NewHNTHolders = debit(
+                From,
+                Burns,
+                credit(
+                    From,
+                    L2#l2.pending_payouts,
+                    NewState#state.hnt_holders
+                )
             ),
             {reply, {ok, L2#l2.pending_payouts}, NewState#state{
                 hnt_holders = NewHNTHolders,
