@@ -4,6 +4,9 @@
 
 %% HNT to LWT, does not change
 -define(ExchangeRate, 1000).
+-define(BONES_PER_HNT, 100000000).
+-define(ORACLE_PRICE_SCALING_FACTOR, 100000000).
+-define(USD_TO_DC, 100000).
 
 -record(state, {
     nonce = 0,
@@ -91,8 +94,9 @@ handle_call({burn, Burner, Burnee, Amount}, _From, State) ->
     %% then consulting the HNT price oracle.
     HNT = Amount div ?ExchangeRate,
     {ok, Price} = price_oracle:get_price(),
-    %% TODO I forget the math to calculate DC here, fix it later
-    DC = HNT * Price,
+    HNTInUSD = ((HNT / ?BONES_PER_HNT)  * Price) / ?ORACLE_PRICE_SCALING_FACTOR,
+    DC = ceil(HNTInUSD * ?USD_TO_DC),
+
     {reply, ok, State#state{
         pending_operations = State#state.pending_operations ++ [{dc, Burnee, DC}],
         burns = State#state.burns + HNT
