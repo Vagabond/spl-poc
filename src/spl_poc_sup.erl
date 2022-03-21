@@ -44,10 +44,10 @@ init([]) ->
         ?WORKER(po, price_oracle, []),
         ?WORKER(hnt, hnt, [
             #{kenny => 20, kyle => 80},
-            #{eric => 10, stan => 20},
+            #{eric => 50000, stan => 30000, butters => 500},
             #{lwt => 1000}
         ]),
-        ?WORKER(lwt, lwt, []),
+        ?WORKER(lwt, lwt, [#{vihu => 400000, andrew => 500000}]),
         ?WORKER(lwt_chain, lwt_chain, [#{tall_blonde_condor => andrew}]),
         ?WORKER(periodic_hotspot, periodic_hotspot, [])
     ],

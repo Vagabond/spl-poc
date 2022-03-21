@@ -31,8 +31,8 @@
 
 -export([
     transfer_security/3,
-    transfer_hnt/3
-    %get_hnt_balance/1,
+    transfer_hnt/3,
+    get_hnt_balance/1
     %get_security_balance/1
 ]).
 
@@ -56,6 +56,9 @@ transfer_security(Payer, Payee, Amount) ->
 transfer_hnt(Payer, Payee, Amount) ->
     gen_server:call(?MODULE, {transfer_hnt, Payer, Payee, Amount}, infinity).
 
+get_hnt_balance(Account) ->
+    gen_server:call(?MODULE, {get_hnt_balance, Account}, infinity).
+
 update_from_l2(From, Nonce, NewPower, Burns) ->
     gen_server:call(?MODULE, {update, From, Nonce, NewPower, Burns}).
 
@@ -75,6 +78,8 @@ handle_info(_Any, State) ->
 handle_cast(_Any, State) ->
     {noreply, State}.
 
+handle_call({get_hnt_balance, Account}, _From, State = #state{hnt_holders = HNTHolders}) ->
+    {reply, maps:get(Account, HNTHolders, 0), State};
 handle_call(
     {transfer_security, Payer, Payee, Amount},
     _From,

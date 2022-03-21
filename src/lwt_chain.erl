@@ -8,7 +8,7 @@
 
 -export([start_link/1]).
 
--export([add_hotspot/2, fund_owner/2]).
+-export([add_hotspot/2, fund_owner/2, get_validator_init_ht/1]).
 
 -record(state, {
     oracles = [],
@@ -16,6 +16,8 @@
     dc_balances = #{},
     %% address => owner
     hotspots = #{},
+    %% val_address => {owner, init_height}
+    validators = #{},
     %% account => reward share
     pending_rewards = #{}
 }).
@@ -27,6 +29,9 @@ fund_owner(Payer, DCAmt) ->
 
 add_hotspot(Payer, HotspotAddress) ->
     gen_server:call(?MODULE, {add_hotspot, Payer, HotspotAddress}, infinity).
+
+get_validator_init_ht(ValidatorAddress) ->
+    gen_server:call(?MODULE, {get_validator_init_ht, ValidatorAddress}, infinity).
 
 start_link(InitialHotspots) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [InitialHotspots], []).
@@ -45,11 +50,11 @@ handle_info(reward, State = #state{hotspots = Hotspots}) ->
         N ->
             %% pick a random hotspot and give them an award
             Winner = lists:nth(rand:uniform(N), maps:values(Hotspots)),
-            lager:info("Rewarding owner ~p += 1", [Winner]),
+            lager:debug("Rewarding owner ~p += 1", [Winner]),
             {noreply, State#state{pending_rewards = credit(Winner, 1, State#state.pending_rewards)}}
     end;
 handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards}) ->
-    lager:info("Got oracle msg, pending_rewards: ~p", [Rewards]),
+    lager:debug("Got oracle msg, pending_rewards: ~p", [Rewards]),
     erlang:send_after(rand:uniform(5000), self(), oracle),
     {ok, {Nonce, Ops}} = lwt:oracle(),
     %% see if we have 3 oracles with this nonce and we have rewards to do
@@ -78,18 +83,38 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                     %% ok, all the oracles are coherent
                     Power = maps:size(State#state.hotspots),
                     ok = lwt:update_from_chain(Nonce, length(ShortestOps), Rewards, Power),
-                    lager:info("Protocol Power (# of hotspots) ~p", [Power]),
+                    lager:debug("Protocol Power (# of hotspots) ~p", [Power]),
                     %% apply the pending operations list
-                    NewHolders = lists:foldl(
-                        fun({dc, Account, Value}, Acc) ->
-                            lager:info("Crediting ~p with ~p", [Account, Value]),
-                            credit(Account, Value, Acc)
+                    {NewHolders, NewValidators} = lists:foldl(
+                        fun
+                            ({dc, Account, Value}, {HAcc, VAcc}) ->
+                                lager:debug("Crediting ~p with ~p", [Account, Value]),
+                                {credit(Account, Value, HAcc), VAcc};
+                            (
+                                {stake_validator, Owner, ValidatorAddress, InitHeight},
+                                {HAcc, VAcc}
+                            ) ->
+                                lager:debug("Adding validator: ~p, owner: ~p", [
+                                    ValidatorAddress, Owner
+                                ]),
+                                {HAcc, add_validator(ValidatorAddress, {Owner, InitHeight}, VAcc)};
+                            (
+                                {unstake_validator, Owner, ValidatorAddress},
+                                {HAcc, VAcc}
+                            ) ->
+                                lager:debug("Removing validator: ~p, owner: ~p", [
+                                    ValidatorAddress, Owner
+                                ]),
+                                {HAcc, remove_validator(ValidatorAddress, VAcc)}
                         end,
-                        State#state.dc_balances,
+                        {State#state.dc_balances, State#state.validators},
                         ShortestOps
                     ),
                     {noreply, State#state{
-                        oracles = [], pending_rewards = #{}, dc_balances = NewHolders
+                        oracles = [],
+                        pending_rewards = #{},
+                        dc_balances = NewHolders,
+                        validators = NewValidators
                     }};
                 false ->
                     {noreply, State#state{oracles = []}}
@@ -112,6 +137,16 @@ handle_call({add_hotspot, Owner, HotspotAddress}, _From, State = #state{dc_balan
             }};
         false ->
             {reply, {error, insufficient_balance}, State}
+    end;
+handle_call(
+    {get_validator_init_ht, ValidatorAddress}, _From, State = #state{validators = Validators}
+) ->
+    case lists:member(ValidatorAddress, maps:keys(Validators)) of
+        false ->
+            {reply, {error, unknown_validator2}, State};
+        true ->
+            {_Owner, InitHeight} = maps:get(ValidatorAddress, Validators),
+            {reply, {ok, InitHeight}, State}
     end.
 
 credit(Key, Amount, Map) ->
@@ -119,3 +154,9 @@ credit(Key, Amount, Map) ->
 
 debit(Key, Amount, Map) ->
     maps:update_with(Key, fun(V) -> V - Amount end, Map).
+
+add_validator(Key, Value, Map) ->
+    maps:put(Key, Value, Map).
+
+remove_validator(Key, Map) ->
+    maps:remove(Key, Map).

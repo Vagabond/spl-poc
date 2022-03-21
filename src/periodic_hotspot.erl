@@ -41,7 +41,7 @@ schedule_add_hotspot() ->
     #{public := PubKey, secret := _PrivKey} = libp2p_crypto:generate_keys(ed25519),
     {ok, HotspotName} = erl_angry_purple_tiger:animal_name(libp2p_crypto:pubkey_to_bin(PubKey)),
     Owner = lists:nth(rand:uniform(length(?owners)), ?owners),
-    lager:info("Adding hotspot ~p for ~p", [HotspotName, Owner]),
+    lager:debug("Adding hotspot ~p for ~p", [HotspotName, Owner]),
     lwt_chain:add_hotspot(Owner, list_to_atom(HotspotName)),
 
     ok.
