@@ -1,3 +1,20 @@
+%%%-------------------------------------------------------------------
+%% @doc
+%% == periodic_hotspot ==
+%%
+%% This just models hotspots getting adding to the helium blockchain
+%% over time.
+%%
+%% Notably:
+%%
+%% - It has a fixed list of owners for demonstration purpose
+%% - Generates some random hotspot name
+%% - Calls lwt_chain:add_hotspot to add the hotspot
+%% - Repeat adding hotspot every 1-10 seconds
+%%
+%% @end
+%%%-------------------------------------------------------------------
+
 -module(periodic_hotspot).
 
 -behaviour(gen_server).

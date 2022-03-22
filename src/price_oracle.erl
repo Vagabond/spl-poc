@@ -1,7 +1,14 @@
--module(price_oracle).
-
-%% we assume a real price oracle contract exists, this is just a stub
+%%%-------------------------------------------------------------------
+%% @doc
+%% == price_oracle ==
+%%
+%% We assume a real price oracle contract exists, this is just a stub
 %% as this should be a solved problem
+%%
+%% @end
+%%%-------------------------------------------------------------------
+
+-module(price_oracle).
 
 -behaviour(gen_server).
 

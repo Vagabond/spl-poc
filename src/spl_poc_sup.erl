@@ -47,7 +47,7 @@ init([]) ->
             #{eric => 50000, stan => 30000, butters => 500},
             #{lwt => 1000}
         ]),
-        ?WORKER(lwt, lwt, [#{vihu => 400000, andrew => 500000}]),
+        ?WORKER(lwt, lwt, [#{evan => 400000, jay => 5000000}]),
         ?WORKER(lwt_chain, lwt_chain, [#{tall_blonde_condor => andrew}]),
         ?WORKER(periodic_hotspot, periodic_hotspot, [])
     ],

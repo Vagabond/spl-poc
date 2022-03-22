@@ -23,6 +23,8 @@
 }).
 
 -define(HotspotAddFee, 100).
+%% Number of validators to reward
+-define(CGCount, 2).
 
 fund_owner(Payer, DCAmt) ->
     gen_server:call(?MODULE, {fund_owner, Payer, DCAmt}, infinity).
@@ -50,8 +52,23 @@ handle_info(reward, State = #state{hotspots = Hotspots}) ->
         N ->
             %% pick a random hotspot and give them an award
             Winner = lists:nth(rand:uniform(N), maps:values(Hotspots)),
-            lager:debug("Rewarding owner ~p += 1", [Winner]),
-            {noreply, State#state{pending_rewards = credit(Winner, 1, State#state.pending_rewards)}}
+            lager:debug("Rewarding hotspot owner ~p += 1", [Winner]),
+
+            %% pick some random k validators and reward their owners some lwt
+            ValWinners = [
+                O
+             || {O, _} <- lists:sublist(shuffle(maps:values(State#state.validators)), ?CGCount)
+            ],
+            lager:debug("Rewarding validator owners ~p += 1", [ValWinners]),
+
+            NewPendingRewards = lists:foldl(
+                fun(W, Acc) ->
+                    credit(W, 1, Acc)
+                end,
+                State#state.pending_rewards,
+                ValWinners ++ [Winner]
+            ),
+            {noreply, State#state{pending_rewards = NewPendingRewards}}
     end;
 handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards}) ->
     lager:debug("Got oracle msg, pending_rewards: ~p", [Rewards]),
@@ -160,3 +177,6 @@ add_validator(Key, Value, Map) ->
 
 remove_validator(Key, Map) ->
     maps:remove(Key, Map).
+
+shuffle(Xs) ->
+    [X || {_, X} <- lists:sort([{rand:uniform(), X} || X <- Xs])].

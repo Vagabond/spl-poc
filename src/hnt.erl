@@ -1,7 +1,18 @@
--module(hnt).
+%%%-------------------------------------------------------------------
+%% @doc
+%% == hnt ==
+%%
+%% This module models the HNT minting contract.
+%% In its state it maintains:
+%%
+%% - HST holders
+%% - HNT holders
+%% - HNT -> L2 contracts
+%%
+%% @end
+%%%-------------------------------------------------------------------
 
-%% HNT minting contract, provides HNT to L2 contracts and
-%% security token holders and manages balances for HNT and security tokens
+-module(hnt).
 
 -behaviour(gen_server).
 
