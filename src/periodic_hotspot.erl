@@ -23,6 +23,8 @@
 
 -export([start_link/0]).
 
+-include("util.hrl").
+
 -define(owners, [vihu, andrew, amir, hashcode, marc, mark]).
 
 start_link() ->
@@ -33,7 +35,8 @@ start_link() ->
 init([]) ->
     ok = lists:foreach(
         fun(Owner) ->
-            lwt_chain:fund_owner(Owner, 100000)
+            %% Burn 5000 LWT = 5 HNT = $125
+            ok = lwt:burn_to_dc(Owner, Owner, 5000)
         end,
         ?owners
     ),

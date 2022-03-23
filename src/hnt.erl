@@ -138,9 +138,10 @@ handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
             throw({reply, {error, bad_l2_nonce}, State});
         {ok, _} ->
             %% make sure the amount to burn is less than we hold
-            case maps:get(From, State#state.hnt_holders, 0) < Burns of
+            Amt = maps:get(From, State#state.hnt_holders, 0),
+            case Amt < Burns of
                 true ->
-                    throw({reply, {error, overburned}, State});
+                    throw({reply, {error, {overburned, From, Amt, Burns}}, State});
                 false ->
                     ok
             end,

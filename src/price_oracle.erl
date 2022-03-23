@@ -18,6 +18,8 @@
 
 -export([start_link/0, get_price/0, set_price/1]).
 
+-include("util.hrl").
+
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
@@ -28,7 +30,8 @@ set_price(Price) ->
     gen_server:call(?MODULE, {set_price, Price}, infinity).
 
 init([]) ->
-    {ok, #state{price = 100}}.
+    %% 25 USD
+    {ok, #state{price = 25 * ?ORACLE_PRICE_SCALING_FACTOR}}.
 
 handle_info(_Any, State) ->
     {noreply, State}.
