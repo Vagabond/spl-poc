@@ -1,12 +1,12 @@
 %%%-------------------------------------------------------------------
 %% @doc
-%% == hnt ==
-%%
 %% This module models the HNT minting contract.
 %% In its state it maintains:
 %%
 %% - HST holders
+%%
 %% - HNT holders
+%%
 %% - HNT -> L2 contracts
 %%
 %% @end
@@ -58,21 +58,27 @@
 %% how many total security tokens can ever exist
 -define(SecurityCount, 100).
 
+%% @private
 start_link(SecurityHolders, HNTHolders, L2s) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [SecurityHolders, HNTHolders, L2s], []).
 
+%% @doc Transfer `Amount' HSTs from `Payer' to `Payee'.
 transfer_security(Payer, Payee, Amount) ->
     gen_server:call(?MODULE, {transfer_security, Payer, Payee, Amount}, infinity).
 
+%% @doc Transfer `Amount' HNTs from `Payer' to `Payee'.
 transfer_hnt(Payer, Payee, Amount) ->
     gen_server:call(?MODULE, {transfer_hnt, Payer, Payee, Amount}, infinity).
 
+%% @doc Get HNT balance for `Account'.
 get_hnt_balance(Account) ->
     gen_server:call(?MODULE, {get_hnt_balance, Account}, infinity).
 
+%% @doc API for SubDAO contracts to update their state with the HNT contract.
 update_from_l2(From, Nonce, NewPower, Burns) ->
     gen_server:call(?MODULE, {update, From, Nonce, NewPower, Burns}).
 
+%% @private
 init([SecurityHolders, HNTHolders, L2s]) ->
     L2Recs = maps:map(
         fun(_K, V) ->
@@ -83,12 +89,15 @@ init([SecurityHolders, HNTHolders, L2s]) ->
 
     {ok, #state{security_holders = SecurityHolders, hnt_holders = HNTHolders, l2s = L2Recs}}.
 
+%% @private
 handle_info(_Any, State) ->
     {noreply, State}.
 
+%% @private
 handle_cast(_Any, State) ->
     {noreply, State}.
 
+%% @private
 handle_call({get_hnt_balance, Account}, _From, State = #state{hnt_holders = HNTHolders}) ->
     {reply, maps:get(Account, HNTHolders, 0), State};
 handle_call(

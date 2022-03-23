@@ -1,3 +1,9 @@
+%%%-------------------------------------------------------------------
+%% @doc
+%% This module models the LoRaWAN Helium chain as a L2.
+%% @end
+%%%-------------------------------------------------------------------
+
 -module(lwt_chain).
 
 %% this module pretends to be a L2 chain, in this case Helium's chain

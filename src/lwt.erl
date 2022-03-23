@@ -1,3 +1,22 @@
+%%%-------------------------------------------------------------------
+%% @doc
+%% This module models the LWT SubDAO contract
+%% In its state it maintains:
+%% 
+%% - Nonce of synced state with LWT chain
+%%
+%% - Holders of LWT tokens
+%%
+%% - Staked validator information
+%%
+%% - How much HNT needs to be burned next time the HNT contract is updated
+%%
+%% - Pending operations for the LWT chain
+%%
+%% @end
+%%%-------------------------------------------------------------------
+
+
 -module(lwt).
 
 -behaviour(gen_server).
@@ -33,22 +52,27 @@
 
 -export([stake_validator/3, unstake_validator/3]).
 
+%% @private
 start_link(LWTHolders) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [LWTHolders], []).
 
+%% @doc Transfer `Amount' LWTs from `Payer' to `Payee'.
 transfer(Payer, Payee, Amount) ->
     gen_server:call(?MODULE, {transfer, Payer, Payee, Amount}, infinity).
 
+%% @doc Convert `Amount' of `Payer''s LWT into HNT at the HNT-LWT exchange rate.
 convert_to_hnt(Payer, Amount) ->
     %% essentially we destroy some LWT and then send some of the HNT this contract
     %% controls to the Payer's address via the hnt contract api
     gen_server:call(?MODULE, {convert, Payer, Amount}, infinity).
 
+%% @doc Burn `Amount' of `Payer''s LWTs into LWT-DCs in favor of `Payee'.
 burn_to_dc(Burner, Burnee, Amount) ->
     %% destroy LWT and mark the equivalent amount of HNT to be burned next time we
     %% send an update to the hnt contract
     gen_server:call(?MODULE, {burn, Burner, Burnee, Amount}, infinity).
 
+%% @doc Function to get the state of the LWT contract.
 oracle() ->
     %% get the nonce and the l2 pending operations stack
     %% multiple attempts at oracling may give longer lists of pending operations
@@ -66,15 +90,19 @@ unstake_validator(Owner, ValidatorAddress, TerminateHeight) ->
 update_from_chain(Nonce, OpCount, RewardShares, Power) ->
     gen_server:call(?MODULE, {update, Nonce, OpCount, RewardShares, Power}, infinity).
 
+%% @private
 init([LWTHolders]) ->
     {ok, #state{holders = LWTHolders}}.
 
+%% @private
 handle_info(_Any, State) ->
     {noreply, State}.
 
+%% @private
 handle_cast(_Any, State) ->
     {noreply, State}.
 
+%% @private
 handle_call({stake_validator, Owner, ValidatorAddress, InitHeight}, _From, State) ->
     %% TODO: More checks
     case lists:member(ValidatorAddress, maps:keys(State#state.validators)) of
