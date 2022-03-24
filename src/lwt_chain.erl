@@ -14,7 +14,7 @@
 
 -export([start_link/1]).
 
--export([add_hotspot/2, get_validator_init_ht/1]).
+-export([add_hotspot/2, get_validator_init_ht/1, height/0]).
 
 -record(state, {
     oracles = [],
@@ -30,6 +30,9 @@
 }).
 
 -include("util.hrl").
+
+height() ->
+    gen_server:call(?MODULE, height, infinity).
 
 add_hotspot(Payer, HotspotAddress) ->
     gen_server:call(?MODULE, {add_hotspot, Payer, HotspotAddress}, infinity).
@@ -47,6 +50,7 @@ init([InitialHotspots]) ->
     {ok, #state{hotspots = InitialHotspots}}.
 
 handle_info(increment_height, State = #state{height = Ht}) ->
+    erlang:send_after(1000, self(), increment_height),
     {noreply, State#state{height = Ht + 1}};
 handle_info(reward, State = #state{hotspots = Hotspots}) ->
     erlang:send_after(rand:uniform(5000), self(), reward),
@@ -157,6 +161,8 @@ handle_info(_Any, State) ->
 handle_cast(_Any, State) ->
     {noreply, State}.
 
+handle_call(height, _From, State = #state{height = Ht}) ->
+    {reply, {ok, Ht}, State};
 handle_call({add_hotspot, Owner, HotspotAddress}, _From, State = #state{dc_balances = DCs}) ->
     case maps:get(Owner, DCs, 0) >= ?HotspotAddFee of
         true ->
