@@ -156,7 +156,7 @@ handle_call({burn, Burner, Burnee, LWTAmount}, _From, State) ->
     %% calculate the amount of DC this LWT is worth by converting LWT to HNT and
     %% then consulting the HNT price oracle.
     HNT = LWTAmount div ?HNT_TO_LWT_RATE,
-    DC = hnt_to_dc(HNT * ?BONES_PER_HNT),
+    DC = util:hnt_to_dc(HNT),
     lager:info("Burnee: ~p, LWT: ~p, HNT: ~p, DC: ~p", [Burnee, LWTAmount, HNT, DC]),
 
     {reply, ok, State#state{
@@ -206,8 +206,3 @@ debit(Key, Amount, Map) ->
 
 credit(Key, Amount, Map) ->
     maps:update_with(Key, fun(V) -> V + Amount end, Amount, Map).
-
-hnt_to_dc(HNT) ->
-    {ok, Price} = price_oracle:get_price(),
-    HNTInUSD = ((HNT / ?BONES_PER_HNT) * Price) / ?ORACLE_PRICE_SCALING_FACTOR,
-    ceil(HNTInUSD * ?USD_TO_DC).

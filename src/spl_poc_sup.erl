@@ -43,12 +43,13 @@ init([]) ->
         period => 1
     },
 
-    %% Each person holds 20000 * 1000 LWT = 20000 HNT (stored in stones)
+    %% Each person holds 200000 LWT = 200 HNT
+    %% except vihu and andrew cuz they will stake some validator(s)
     LWTHolders = #{
         evan => 200000 * ?STONES_PER_LWT,
         jay => 200000 * ?STONES_PER_LWT,
-        vihu => 200000 * ?STONES_PER_LWT,
-        andrew => 200000 * ?STONES_PER_LWT,
+        vihu => 30 * 1000 * 1000 * ?STONES_PER_LWT,
+        andrew => 30 * 1000 * 1000 * ?STONES_PER_LWT,
         amir => 200000 * ?STONES_PER_LWT,
         hashcode => 200000 * ?STONES_PER_LWT,
         marc => 200000 * ?STONES_PER_LWT,

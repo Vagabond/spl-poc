@@ -33,13 +33,24 @@ start_link() ->
 -record(state, {}).
 
 init([]) ->
+    %% Burn 5000 LWT = 5 HNT = $125 for each owner
+    %% for being able to add hotspots
     ok = lists:foreach(
         fun(Owner) ->
-            %% Burn 5000 LWT = 5 HNT = $125
-            ok = lwt:burn_to_dc(Owner, Owner, 5000)
+            ok = lwt:burn_to_dc(Owner, Owner, 5 * ?HNT_TO_LWT_RATE)
         end,
         ?owners
     ),
+
+    %% Burn extra 20K HNT for vihu and andrew, for validator staking
+    ok = lists:foreach(
+        fun(Owner) ->
+            %% Burn 20K HNT = 20 * 1000 * 1000 LWT
+            ok = lwt:burn_to_dc(Owner, Owner, 20 * 1000 * ?HNT_TO_LWT_RATE)
+        end,
+        [vihu, andrew]
+    ),
+
     schedule_add_hotspot(),
     {ok, #state{}}.
 

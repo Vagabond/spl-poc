@@ -113,16 +113,28 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                                 lager:debug("Crediting ~p with ~p", [Account, Value]),
                                 {credit(Account, Value, HAcc), VAcc};
                             ({stake_validator, Owner, ValidatorAddress}, {HAcc, VAcc}) ->
-                                lager:debug("Adding validator: ~p, owner: ~p", [
-                                    ValidatorAddress, Owner
-                                ]),
-                                {
-                                    debit(Owner, ?ValidatorCost, HAcc),
-                                    add_validator(ValidatorAddress, {Owner, Height}, VAcc)
-                                };
+                                DCsToDebit = util:hnt_to_dc(?ValidatorCost div ?HNT_TO_LWT_RATE),
+                                case maps:get(Owner, State#state.dc_balances, 0) of
+                                    Bal when Bal > DCsToDebit ->
+                                        lager:debug("Adding validator: ~p, owner: ~p", [
+                                            ValidatorAddress,
+                                            Owner
+                                        ]),
+                                        {
+                                            debit(Owner, DCsToDebit, HAcc),
+                                            add_validator(ValidatorAddress, {Owner, Height}, VAcc)
+                                        };
+                                    _ ->
+                                        lager:debug(
+                                            "owner: ~p has insufficient balance for adding validator: ~p!",
+                                            [Owner, ValidatorAddress]
+                                        ),
+                                        {HAcc, VAcc}
+                                end;
                             ({unstake_validator, Owner, ValidatorAddress}, {HAcc, VAcc}) ->
                                 lager:debug("Removing validator: ~p, owner: ~p", [
-                                    ValidatorAddress, Owner
+                                    ValidatorAddress,
+                                    Owner
                                 ]),
                                 {HAcc, remove_validator(ValidatorAddress, VAcc)}
                         end,
@@ -156,7 +168,9 @@ handle_call({add_hotspot, Owner, HotspotAddress}, _From, State = #state{dc_balan
             {reply, {error, insufficient_balance}, State}
     end;
 handle_call(
-    {get_validator_init_ht, ValidatorAddress}, _From, State = #state{validators = Validators}
+    {get_validator_init_ht, ValidatorAddress},
+    _From,
+    State = #state{validators = Validators}
 ) ->
     case lists:member(ValidatorAddress, maps:keys(Validators)) of
         false ->

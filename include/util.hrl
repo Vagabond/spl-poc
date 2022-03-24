@@ -16,8 +16,8 @@
 %% LWT satoshis
 -define(STONES_PER_LWT, ?BONES_PER_HNT div ?HNT_TO_LWT_RATE).
 
-%% in stones (10k HNT)
--define(ValidatorCost, 10000 * ?HNT_TO_LWT_RATE * ?STONES_PER_LWT).
+%% 10k HNT = 10K * 1000 LWT (in lwt)
+-define(ValidatorCost, 10000 * ?HNT_TO_LWT_RATE).
 
 %% Number of validators to reward
 -define(CGCount, 2).
