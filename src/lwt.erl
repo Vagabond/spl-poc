@@ -44,9 +44,15 @@
 
 -export([stake_validator/2, unstake_validator/2]).
 
+-export([state/0]).
+
 %% @private
 start_link(LWTHolders) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [LWTHolders], []).
+
+%% @doc Get LWT contract state
+state() ->
+    gen_server:call(?MODULE, state, infinity).
 
 %% @doc Transfer `Amount' LWTs from `Payer' to `Payee'.
 transfer(Payer, Payee, Amount) ->
@@ -93,7 +99,18 @@ handle_cast(_Any, State) ->
     {noreply, State}.
 
 %% @private
-handle_call({stake_validator, Owner, ValidatorAddress}, _From, State = #state{holders = Holders}) ->
+handle_call(
+    state,
+    _From,
+    State = #state{holders = Holders, validators = Validators, chain_ht = ChainHt, nonce = Nonce}
+) ->
+    Reply = #{holders => Holders, validators => Validators, chain_ht => ChainHt, nonce => Nonce},
+    {reply, {ok, Reply}, State};
+handle_call(
+    {stake_validator, Owner, ValidatorAddress},
+    _From,
+    State = #state{holders = Holders, validators = Validators, chain_ht = ChainHt}
+) ->
     case lists:member(ValidatorAddress, maps:keys(State#state.validators)) of
         true ->
             throw({reply, {error, already_staked}, State});
@@ -105,12 +122,14 @@ handle_call({stake_validator, Owner, ValidatorAddress}, _From, State = #state{ho
             case maps:get(Owner, Holders, 0) of
                 OwnerLWT when OwnerLWT > ?ValidatorCost ->
                     NewHolders = debit(Owner, ?ValidatorCost, Holders),
+                    NewValidators = add_validator(ValidatorAddress, {Owner, ChainHt}, Validators),
                     NewPendingOps =
                         State#state.pending_operations ++
                             [{stake_validator, Owner, ValidatorAddress}],
                     {reply, ok, State#state{
                         pending_operations = NewPendingOps,
-                        holders = NewHolders
+                        holders = NewHolders,
+                        validators = NewValidators
                     }};
                 _ ->
                     throw({reply, {error, insufficient_staking_balance}, State})
@@ -224,3 +243,6 @@ debit(Key, Amount, Map) ->
 
 credit(Key, Amount, Map) ->
     maps:update_with(Key, fun(V) -> V + Amount end, Amount, Map).
+
+add_validator(Key, Val, Map) ->
+    maps:put(Key, Val, Map).

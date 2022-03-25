@@ -14,7 +14,9 @@
 
 -export([start_link/1]).
 
--export([add_hotspot/2, get_validator_init_ht/1, height/0]).
+-export([add_hotspot/2]).
+
+-export([height/0, state/0]).
 
 -record(state, {
     oracles = [],
@@ -34,11 +36,11 @@
 height() ->
     gen_server:call(?MODULE, height, infinity).
 
+state() ->
+    gen_server:call(?MODULE, state, infinity).
+
 add_hotspot(Payer, HotspotAddress) ->
     gen_server:call(?MODULE, {add_hotspot, Payer, HotspotAddress}, infinity).
-
-get_validator_init_ht(ValidatorAddress) ->
-    gen_server:call(?MODULE, {get_validator_init_ht, ValidatorAddress}, infinity).
 
 start_link(InitialHotspots) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [InitialHotspots], []).
@@ -148,6 +150,27 @@ handle_info(_Any, State) ->
 handle_cast(_Any, State) ->
     {noreply, State}.
 
+handle_call(
+    state,
+    _From,
+    State = #state{
+        oracles = Oracles,
+        dc_balances = DCBalances,
+        hotspots = Hotspots,
+        validators = Validators,
+        pending_rewards = PR,
+        height = Ht
+    }
+) ->
+    Reply = #{
+        oracles => Oracles,
+        dc_balances => DCBalances,
+        hotspots => Hotspots,
+        validators => Validators,
+        pending_rewards => PR,
+        height => Ht
+    },
+    {reply, {ok, Reply}, State};
 handle_call(height, _From, State = #state{height = Ht}) ->
     {reply, {ok, Ht}, State};
 handle_call({add_hotspot, Owner, HotspotAddress}, _From, State = #state{dc_balances = DCs}) ->
@@ -159,18 +182,6 @@ handle_call({add_hotspot, Owner, HotspotAddress}, _From, State = #state{dc_balan
             }};
         false ->
             {reply, {error, insufficient_balance}, State}
-    end;
-handle_call(
-    {get_validator_init_ht, ValidatorAddress},
-    _From,
-    State = #state{validators = Validators}
-) ->
-    case lists:member(ValidatorAddress, maps:keys(Validators)) of
-        false ->
-            {reply, {error, unknown_validator2}, State};
-        true ->
-            {_Owner, InitHeight} = maps:get(ValidatorAddress, Validators),
-            {reply, {ok, InitHeight}, State}
     end.
 
 credit(Key, Amount, Map) ->
