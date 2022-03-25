@@ -48,8 +48,8 @@ init([]) ->
     LWTHolders = #{
         evan => 200000 * ?STONES_PER_LWT,
         jay => 200000 * ?STONES_PER_LWT,
-        vihu => 30 * 1000 * 1000 * ?STONES_PER_LWT,
-        andrew => 30 * 1000 * 1000 * ?STONES_PER_LWT,
+        vihu => 200000 * 100 * ?STONES_PER_LWT,         % 20K HNT equivalent
+        andrew => 200000 * 100 * ?STONES_PER_LWT,       % 20K HNT equivalent
         amir => 200000 * ?STONES_PER_LWT,
         hashcode => 200000 * ?STONES_PER_LWT,
         marc => 200000 * ?STONES_PER_LWT,

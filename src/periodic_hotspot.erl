@@ -42,15 +42,6 @@ init([]) ->
         ?owners
     ),
 
-    %% Burn extra 20K HNT for vihu and andrew, for validator staking
-    ok = lists:foreach(
-        fun(Owner) ->
-            %% Burn 20K HNT = 20 * 1000 * 1000 LWT
-            ok = lwt:burn_to_dc(Owner, Owner, 20 * 1000 * ?HNT_TO_LWT_RATE)
-        end,
-        [vihu, andrew]
-    ),
-
     schedule_add_hotspot(),
     {ok, #state{}}.
 

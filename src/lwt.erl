@@ -34,7 +34,6 @@
     chain_ht = 0
 }).
 
-
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3]).
 
 -export([start_link/1]).
@@ -94,18 +93,33 @@ handle_cast(_Any, State) ->
     {noreply, State}.
 
 %% @private
-handle_call({stake_validator, Owner, ValidatorAddress}, _From, State) ->
-    %% TODO: More checks
+handle_call({stake_validator, Owner, ValidatorAddress}, _From, State = #state{holders = Holders}) ->
     case lists:member(ValidatorAddress, maps:keys(State#state.validators)) of
         true ->
             throw({reply, {error, already_staked}, State});
         false ->
-            NewPendingOps =
-                State#state.pending_operations ++ [{stake_validator, Owner, ValidatorAddress}],
-            {reply, ok, State#state{pending_operations = NewPendingOps}}
+            %% NOTE:
+            %% - Immediate debit of LWT stake to prevent potential spending resulting
+            %% in the stake being considered invalid
+            %% - Also add the stake_validator instruction to pending_operations list
+            case maps:get(Owner, Holders, 0) of
+                OwnerLWT when OwnerLWT > ?ValidatorCost ->
+                    NewHolders = debit(Owner, ?ValidatorCost, Holders),
+                    NewPendingOps =
+                        State#state.pending_operations ++
+                            [{stake_validator, Owner, ValidatorAddress}],
+                    {reply, ok, State#state{
+                        pending_operations = NewPendingOps,
+                        holders = NewHolders
+                    }};
+                _ ->
+                    throw({reply, {error, insufficient_staking_balance}, State})
+            end
     end;
 handle_call(
-    {unstake_validator, Owner, ValidatorAddress}, _From, State = #state{chain_ht = ChainHeight}
+    {unstake_validator, Owner, ValidatorAddress},
+    _From,
+    State = #state{chain_ht = ChainHeight}
 ) ->
     case lists:member(ValidatorAddress, maps:keys(State#state.validators)) of
         false ->
@@ -116,6 +130,10 @@ handle_call(
                 false ->
                     throw({reply, {error, insufficient_staking_period}, State});
                 true ->
+                    %% NOTE:
+                    %% - Add the unstake_validator instruction to pending_operations list
+                    %% - Do NOT immediately return the stake, wait for the unstake_validator
+                    %% operation to succeed before crediting stake back to the owner
                     NewPendingOps =
                         State#state.pending_operations ++
                             [{unstake_validator, Owner, ValidatorAddress}],
