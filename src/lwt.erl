@@ -40,7 +40,7 @@
 
 -export([transfer/3, convert_to_hnt/2, burn_to_dc/3]).
 
--export([oracle/0, update_from_chain/5]).
+-export([oracle/0, update_from_chain/6]).
 
 -export([stake_validator/2, unstake_validator/2]).
 
@@ -83,8 +83,10 @@ stake_validator(Owner, ValidatorAddress) ->
 unstake_validator(Owner, ValidatorAddress) ->
     gen_server:call(?MODULE, {unstake_validator, Owner, ValidatorAddress}, infinity).
 
-update_from_chain(Nonce, OpCount, RewardShares, Power, ChainHt) ->
-    gen_server:call(?MODULE, {update, Nonce, OpCount, RewardShares, Power, ChainHt}, infinity).
+update_from_chain(Nonce, OpCount, RewardShares, Power, ChainHt, ChainValidators) ->
+    gen_server:call(
+        ?MODULE, {update, Nonce, OpCount, RewardShares, Power, ChainHt, ChainValidators}, infinity
+    ).
 
 %% @private
 init([LWTHolders]) ->
@@ -109,7 +111,7 @@ handle_call(
 handle_call(
     {stake_validator, Owner, ValidatorAddress},
     _From,
-    State = #state{holders = Holders, validators = Validators, chain_ht = ChainHt}
+    State = #state{holders = Holders, validators = Validators}
 ) ->
     case lists:member(ValidatorAddress, maps:keys(State#state.validators)) of
         true ->
@@ -122,7 +124,7 @@ handle_call(
             case maps:get(Owner, Holders, 0) of
                 OwnerLWT when OwnerLWT > ?ValidatorCost ->
                     NewHolders = debit(Owner, ?ValidatorCost, Holders),
-                    NewValidators = add_validator(ValidatorAddress, {Owner, ChainHt}, Validators),
+                    NewValidators = add_validator(ValidatorAddress, Owner, Validators),
                     NewPendingOps =
                         State#state.pending_operations ++
                             [{stake_validator, Owner, ValidatorAddress}],
@@ -144,21 +146,25 @@ handle_call(
         false ->
             throw({reply, {error, unknown_validator}, State});
         true ->
-            Owner = maps:get(ValidatorAddress, State#state.validators),
-            case (ChainHeight + ?ValidatorStakeReturnBlocks) >= ?ValidatorStakingPeriod of
-                false ->
-                    throw({reply, {error, insufficient_staking_period}, State});
-                true ->
-                    %% NOTE:
+            case maps:get(ValidatorAddress, State#state.validators) of
+                Owner ->
+                    %% NOTE: At this point
+                    %% - This owner is allowed to unstake
                     %% - Add the unstake_validator instruction to pending_operations list
+                    %% - Remove the validator from our state
                     %% - Do NOT immediately return the stake, wait for the unstake_validator
                     %% operation to succeed before crediting stake back to the owner
                     NewPendingOps =
                         State#state.pending_operations ++
                             [{unstake_validator, Owner, ValidatorAddress}],
                     {reply, ok, State#state{
-                        pending_operations = NewPendingOps
-                    }}
+                        pending_operations = NewPendingOps,
+                        validators = remove_validator(
+                            ValidatorAddress, State#state.validators
+                        )
+                    }};
+                _ ->
+                    throw({reply, {error, incorrect_owner}, State})
             end
     end;
 handle_call({transfer, Payer, Payee, Amt}, _From, State) when Amt > 0 ->
@@ -203,7 +209,7 @@ handle_call({burn, Burner, Burnee, LWTAmount}, _From, State) ->
 handle_call(oracle, _From, State) ->
     {reply, {ok, {State#state.nonce, State#state.pending_operations}}, State};
 handle_call(
-    {update, Nonce, OpCount, RewardShares, Power, ChainHt},
+    {update, Nonce, OpCount, RewardShares, Power, ChainHt, ChainValidators},
     _From,
     State = #state{nonce = Nonce, pending_operations = Ops}
 ) ->
@@ -219,14 +225,32 @@ handle_call(
         RewardShares
     ),
     RewardShare = LWT / TotalShares,
-    NewHolders = maps:fold(
+    NewHolders0 = maps:fold(
         fun(K, V, Acc) ->
             credit(K, trunc(V * RewardShare), Acc)
         end,
         State#state.holders,
         RewardShares
     ),
-    lager:debug("New Holders: ~p", [NewHolders]),
+    lager:debug("New Holders: ~p", [NewHolders0]),
+
+    UnstakedValidators = maps:keys(ChainValidators) -- maps:keys(State#state.validators),
+    lager:info("UnstakedValidators: ~p", [UnstakedValidators]),
+
+    NewHolders = lists:foldl(
+        fun(ValidatorAddress, HAcc) ->
+            {Owner, InitHeight} = maps:get(ValidatorAddress, ChainValidators),
+            case (InitHeight + ?ValidatorStakingPeriod) > ChainHt of
+                false ->
+                    HAcc;
+                true ->
+                    lager:info("Crediting owner: ~p for unstaking: ~p", [Owner, ValidatorAddress]),
+                    credit(Owner, ?ValidatorCost, HAcc)
+            end
+        end,
+        NewHolders0,
+        UnstakedValidators
+    ),
 
     %% Now we need to remove the first `OpCount' operations from our pending operations stack, zero out our burns
     %% and increment our nonce
@@ -246,3 +270,6 @@ credit(Key, Amount, Map) ->
 
 add_validator(Key, Val, Map) ->
     maps:put(Key, Val, Map).
+
+remove_validator(Key, Map) ->
+    maps:remove(Key, Map).

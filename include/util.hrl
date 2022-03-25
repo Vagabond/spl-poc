@@ -23,7 +23,7 @@
 -define(CGCount, 2).
 
 %% in Blocks
--define(ValidatorStakingPeriod, 250000).
+-define(ValidatorStakingPeriod, 50).
 
 %% in Blocks
 -define(ValidatorStakeReturnBlocks, 10).

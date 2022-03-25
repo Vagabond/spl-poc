@@ -110,7 +110,14 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                 true ->
                     %% ok, all the oracles are coherent
                     Power = maps:size(State#state.hotspots),
-                    ok = lwt:update_from_chain(Nonce, length(ShortestOps), Rewards, Power, Height),
+                    ok = lwt:update_from_chain(
+                        Nonce,
+                        length(ShortestOps),
+                        Rewards,
+                        Power,
+                        Height,
+                        State#state.validators
+                    ),
                     lager:debug("Protocol Power (# of hotspots) ~p", [Power]),
                     %% apply the pending operations list
                     {NewHolders, NewValidators} = lists:foldl(
