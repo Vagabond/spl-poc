@@ -126,13 +126,17 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                                 lager:debug("Crediting ~p with ~p", [Account, Value]),
                                 {credit(Account, Value, HAcc), VAcc};
                             ({stake_validator, Owner, ValidatorAddress}, {HAcc, VAcc}) ->
-                                lager:debug("Adding validator: ~p, owner: ~p", [
-                                    ValidatorAddress,
-                                    Owner
-                                ]),
-                                {HAcc, add_validator(ValidatorAddress, {Owner, Height}, VAcc)};
+                                case maps:find(ValidatorAddress, VAcc) of
+                                    {ok, CurrentOwner} ->
+                                        %% don't steal from ruins
+                                        lager:warning("Validator ~p already exists with owner ~p (proposed owner ~p)", [ValidatorAddress, CurrentOwner, Owner]),
+                                        {HAcc, VAcc};
+                                    error ->
+                                        lager:info("Adding validator: ~p, owner: ~p", [ValidatorAddress, Owner]),
+                                        {HAcc, add_validator(ValidatorAddress, {Owner, Height}, VAcc)}
+                                end;
                             ({unstake_validator, Owner, ValidatorAddress}, {HAcc, VAcc}) ->
-                                lager:debug("Removing validator: ~p, owner: ~p", [
+                                lager:info("Removing validator: ~p, owner: ~p", [
                                     ValidatorAddress,
                                     Owner
                                 ]),

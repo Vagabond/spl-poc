@@ -124,14 +124,14 @@ handle_call(
             case maps:get(Owner, Holders, 0) of
                 OwnerLWT when OwnerLWT > ?ValidatorCost ->
                     NewHolders = debit(Owner, ?ValidatorCost, Holders),
-                    NewValidators = add_validator(ValidatorAddress, Owner, Validators),
+                    %NewValidators = add_validator(ValidatorAddress, Owner, Validators),
                     NewPendingOps =
                         State#state.pending_operations ++
                             [{stake_validator, Owner, ValidatorAddress}],
                     {reply, ok, State#state{
                         pending_operations = NewPendingOps,
-                        holders = NewHolders,
-                        validators = NewValidators
+                        holders = NewHolders
+                    %    validators = NewValidators
                     }};
                 _ ->
                     throw({reply, {error, insufficient_staking_balance}, State})
@@ -147,7 +147,7 @@ handle_call(
             throw({reply, {error, unknown_validator}, State});
         true ->
             case maps:get(ValidatorAddress, State#state.validators) of
-                Owner ->
+                {Owner, _} ->
                     %% NOTE: At this point
                     %% - This owner is allowed to unstake
                     %% - Add the unstake_validator instruction to pending_operations list
@@ -158,10 +158,7 @@ handle_call(
                         State#state.pending_operations ++
                             [{unstake_validator, Owner, ValidatorAddress}],
                     {reply, ok, State#state{
-                        pending_operations = NewPendingOps,
-                        validators = remove_validator(
-                            ValidatorAddress, State#state.validators
-                        )
+                        pending_operations = NewPendingOps
                     }};
                 _ ->
                     throw({reply, {error, incorrect_owner}, State})
@@ -234,12 +231,14 @@ handle_call(
     ),
     lager:debug("New Holders: ~p", [NewHolders0]),
 
-    UnstakedValidators = maps:keys(ChainValidators) -- maps:keys(State#state.validators),
+    UnstakedValidators = maps:keys(State#state.validators) -- maps:keys(ChainValidators),
     lager:info("UnstakedValidators: ~p", [UnstakedValidators]),
 
     NewHolders = lists:foldl(
         fun(ValidatorAddress, HAcc) ->
-            {Owner, InitHeight} = maps:get(ValidatorAddress, ChainValidators),
+            {Owner, InitHeight} = maps:get(ValidatorAddress, State#state.validators),
+            %% TODO this is the wrong way to do this, we need to track unstaked validators
+            %% until their unstake height has arrived separately
             case (InitHeight + ?ValidatorStakingPeriod) > ChainHt of
                 false ->
                     HAcc;
@@ -252,14 +251,18 @@ handle_call(
         UnstakedValidators
     ),
 
+    lager:info("Ops ~p, OpCount ~p", [Ops, OpCount]),
+    NewPendingOps = lists:sublist(Ops, OpCount + 1, length(Ops)),
+    lager:info("new pending ops ~p", [NewPendingOps]),
     %% Now we need to remove the first `OpCount' operations from our pending operations stack, zero out our burns
     %% and increment our nonce
     {reply, ok, State#state{
         nonce = Nonce + 1,
-        pending_operations = lists:sublist(Ops, OpCount + 1, length(Ops)),
+        pending_operations = NewPendingOps,
         burns = 0,
         holders = NewHolders,
-        chain_ht = ChainHt
+        chain_ht = ChainHt,
+        validators = ChainValidators
     }}.
 
 debit(Key, Amount, Map) ->
