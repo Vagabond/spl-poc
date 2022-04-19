@@ -16,7 +16,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(lwt).
+-module(lwt_contract).
 
 -behaviour(gen_server).
 
@@ -184,7 +184,7 @@ handle_call({convert, Payer, Amount}, _From, State) ->
     end,
     NewHolders = debit(Payer, Amount, State#state.holders),
     %% module is a lazy identifier for this contract, would be a pubkey normally
-    ok = hnt:transfer_hnt(?MODULE, Payer, Amount div ?HNT_TO_LWT_RATE),
+    ok = hnt_contract:transfer_hnt(?MODULE, Payer, Amount div ?HNT_TO_LWT_RATE),
     {reply, ok, State#state{holders = NewHolders}};
 handle_call({burn, Burner, Burnee, LWTAmount}, _From, State) ->
     case maps:get(Burner, State#state.holders, 0) >= LWTAmount of
@@ -211,7 +211,7 @@ handle_call(
     State = #state{nonce = Nonce, pending_operations = Ops}
 ) ->
     lager:debug("LWT got an update msg, Current Holders: ~p", [State#state.holders]),
-    {ok, HNT} = hnt:update_from_l2(?MODULE, Nonce, Power, State#state.burns),
+    {ok, HNT} = hnt_contract:update_from_l2(?MODULE, Nonce, Power, State#state.burns),
     %% ok, we got some HNT, now we need to convert that to LWT and disburse it according to the reward shares
     LWT = HNT * ?HNT_TO_LWT_RATE,
     TotalShares = maps:fold(

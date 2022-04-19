@@ -37,7 +37,7 @@ init([]) ->
     %% for being able to add hotspots
     ok = lists:foreach(
         fun(Owner) ->
-            ok = lwt:burn_to_dc(Owner, Owner, 5 * ?HNT_TO_LWT_RATE)
+            ok = lwt_contract:burn_to_dc(Owner, Owner, 5 * ?HNT_TO_LWT_RATE)
         end,
         ?owners
     ),

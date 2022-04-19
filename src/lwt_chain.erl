@@ -84,7 +84,7 @@ handle_info(reward, State = #state{hotspots = Hotspots}) ->
 handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards, height = Height}) ->
     lager:debug("Got oracle msg, pending_rewards: ~p", [Rewards]),
     erlang:send_after(rand:uniform(5000), self(), oracle),
-    {ok, {Nonce, Ops}} = lwt:oracle(),
+    {ok, {Nonce, Ops}} = lwt_contract:oracle(),
     %% see if we have 3 oracles with this nonce and we have rewards to do
     Oracles = [{N, O} || {N, O} <- Oracles0 ++ [{Nonce, Ops}], N == Nonce],
     case length(Oracles) >= 3 andalso maps:size(Rewards) > 0 of
@@ -110,7 +110,7 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                 true ->
                     %% ok, all the oracles are coherent
                     Power = maps:size(State#state.hotspots),
-                    ok = lwt:update_from_chain(
+                    ok = lwt_contract:update_from_chain(
                         Nonce,
                         length(ShortestOps),
                         Rewards,

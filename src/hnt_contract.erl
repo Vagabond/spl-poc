@@ -12,7 +12,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(hnt).
+-module(hnt_contract).
 
 -behaviour(gen_server).
 
