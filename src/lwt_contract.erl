@@ -111,7 +111,7 @@ handle_call(
 handle_call(
     {stake_validator, Owner, ValidatorAddress},
     _From,
-    State = #state{holders = Holders, validators = Validators}
+    State = #state{holders = Holders}
 ) ->
     case lists:member(ValidatorAddress, maps:keys(State#state.validators)) of
         true ->
@@ -131,17 +131,13 @@ handle_call(
                     {reply, ok, State#state{
                         pending_operations = NewPendingOps,
                         holders = NewHolders
-                    %    validators = NewValidators
+                        %    validators = NewValidators
                     }};
                 _ ->
                     throw({reply, {error, insufficient_staking_balance}, State})
             end
     end;
-handle_call(
-    {unstake_validator, Owner, ValidatorAddress},
-    _From,
-    State = #state{chain_ht = ChainHeight}
-) ->
+handle_call({unstake_validator, Owner, ValidatorAddress}, _From, State) ->
     case lists:member(ValidatorAddress, maps:keys(State#state.validators)) of
         false ->
             throw({reply, {error, unknown_validator}, State});
@@ -236,9 +232,9 @@ handle_call(
 
     NewHolders = lists:foldl(
         fun(ValidatorAddress, HAcc) ->
-                Owner = maps:get(ValidatorAddress, State#state.validators),
-                lager:info("Crediting owner: ~p for unstaking: ~p", [Owner, ValidatorAddress]),
-                credit(Owner, ?ValidatorCost, HAcc)
+            Owner = maps:get(ValidatorAddress, State#state.validators),
+            lager:info("Crediting owner: ~p for unstaking: ~p", [Owner, ValidatorAddress]),
+            credit(Owner, ?ValidatorCost, HAcc)
         end,
         NewHolders0,
         UnstakedValidators
@@ -263,9 +259,3 @@ debit(Key, Amount, Map) ->
 
 credit(Key, Amount, Map) ->
     maps:update_with(Key, fun(V) -> V + Amount end, Amount, Map).
-
-add_validator(Key, Val, Map) ->
-    maps:put(Key, Val, Map).
-
-remove_validator(Key, Map) ->
-    maps:remove(Key, Map).

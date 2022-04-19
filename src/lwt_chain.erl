@@ -19,11 +19,16 @@
 -export([height/0, state/0]).
 
 -record(validator, {
-          owner,
-          init_height,
-          status = staked :: staked | unstaking | unstaked,
-          unstake_height
-         }).
+    %% validator owner pubkey
+    owner,
+    %% height at which the validator got staked
+    init_height,
+    %% validator stake happens immediately, but unstake re-credit happens over block time
+    %% hence we have unstaking -> unstaked statuses
+    status = staked :: staked | unstaking | unstaked,
+    %% height at which the validator got unstaked
+    unstake_height
+}).
 
 -record(state, {
     oracles = [],
@@ -58,16 +63,21 @@ init([InitialHotspots]) ->
     erlang:send_after(1000, self(), increment_height),
     {ok, #state{hotspots = InitialHotspots}}.
 
-handle_info(increment_height, State = #state{height = Ht, validators=Validators}) ->
+handle_info(increment_height, State = #state{height = Ht, validators = Validators}) ->
     erlang:send_after(1000, self(), increment_height),
-    NewValidators = maps:fold(fun(_Key, #validator{status=unstaking, unstake_height=H}, Acc) when H =< Ht ->
-                      %% remove it
-                      %% XXX this is not how the chain works today, validators are not removed
-                      Acc;
-                 (K, V, Acc) ->
-                      maps:put(K, V, Acc)
-              end, #{}, Validators),
-    {noreply, State#state{height = Ht + 1, validators=NewValidators}};
+    NewValidators = maps:fold(
+        fun
+            (_Key, #validator{status = unstaking, unstake_height = H}, Acc) when H =< Ht ->
+                %% remove it
+                %% XXX this is not how the chain works today, validators are not removed
+                Acc;
+            (K, V, Acc) ->
+                maps:put(K, V, Acc)
+        end,
+        #{},
+        Validators
+    ),
+    {noreply, State#state{height = Ht + 1, validators = NewValidators}};
 handle_info(reward, State = #state{hotspots = Hotspots}) ->
     erlang:send_after(rand:uniform(5000), self(), reward),
     case maps:size(Hotspots) of
@@ -79,13 +89,14 @@ handle_info(reward, State = #state{hotspots = Hotspots}) ->
             Winner = lists:nth(rand:uniform(N), maps:values(Hotspots)),
             lager:debug("Rewarding hotspot owner ~p += 1", [Winner]),
 
-            %% pick some random k validators and reward their owners some lwt
+            %% pick some random `CGCount` validators and reward their owners some lwt
             ValWinners = [
                 O
              || {O, _} <- lists:sublist(shuffle(maps:values(State#state.validators)), ?CGCount)
             ],
             lager:debug("Rewarding validator owners ~p += 1", [ValWinners]),
 
+            %% update pending_rewards for validator owners
             NewPendingRewards = lists:foldl(
                 fun(W, Acc) ->
                     credit(W, 1, Acc)
@@ -131,7 +142,7 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                         Power,
                         Height,
                         %% just return the owner, not the whole record
-                        maps:map(fun(_K, #validator{owner=O}) -> O end, State#state.validators)
+                        maps:map(fun(_K, #validator{owner = O}) -> O end, State#state.validators)
                     ),
                     lager:debug("Protocol Power (# of hotspots) ~p", [Power]),
                     %% apply the pending operations list
@@ -144,10 +155,15 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                                 case maps:find(ValidatorAddress, VAcc) of
                                     {ok, CurrentOwner} ->
                                         %% don't steal from ruins
-                                        lager:warning("Validator ~p already exists with owner ~p (proposed owner ~p)", [ValidatorAddress, CurrentOwner, Owner]),
+                                        lager:warning(
+                                            "Validator ~p already exists with owner ~p (proposed owner ~p)",
+                                            [ValidatorAddress, CurrentOwner, Owner]
+                                        ),
                                         {HAcc, VAcc};
                                     error ->
-                                        lager:info("Adding validator: ~p, owner: ~p", [ValidatorAddress, Owner]),
+                                        lager:info("Adding validator: ~p, owner: ~p", [
+                                            ValidatorAddress, Owner
+                                        ]),
                                         {HAcc, add_validator(ValidatorAddress, Owner, Height, VAcc)}
                                 end;
                             ({unstake_validator, Owner, ValidatorAddress}, {HAcc, VAcc}) ->
@@ -217,10 +233,18 @@ debit(Key, Amount, Map) ->
     maps:update_with(Key, fun(V) -> V - Amount end, Map).
 
 add_validator(Key, Owner, Height, Map) ->
-    maps:put(Key, #validator{owner=Owner, init_height=Height}, Map).
+    maps:put(Key, #validator{owner = Owner, init_height = Height}, Map).
 
 unstake_validator(Key, Height, Map) ->
-    maps:update_with(Key, fun(Validator) -> Validator#validator{status=unstaking, unstake_height=Height+?ValidatorUnstakeBlocks} end, Map).
+    maps:update_with(
+        Key,
+        fun(Validator) ->
+            Validator#validator{
+                status = unstaking, unstake_height = Height + ?ValidatorUnstakeBlocks
+            }
+        end,
+        Map
+    ).
 
 shuffle(Xs) ->
     [X || {_, X} <- lists:sort([{rand:uniform(), X} || X <- Xs])].
