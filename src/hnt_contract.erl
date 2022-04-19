@@ -1,7 +1,18 @@
--module(hnt).
+%%%-------------------------------------------------------------------
+%% @doc
+%% This module models the HNT minting contract.
+%% In its state it maintains:
+%%
+%% - HST holders
+%%
+%% - HNT holders
+%%
+%% - HNT -> L2 contracts
+%%
+%% @end
+%%%-------------------------------------------------------------------
 
-%% HNT minting contract, provides HNT to L2 contracts and
-%% security token holders and manages balances for HNT and security tokens
+-module(hnt_contract).
 
 -behaviour(gen_server).
 
@@ -31,8 +42,8 @@
 
 -export([
     transfer_security/3,
-    transfer_hnt/3
-    %get_hnt_balance/1,
+    transfer_hnt/3,
+    get_hnt_balance/1
     %get_security_balance/1
 ]).
 
@@ -47,18 +58,27 @@
 %% how many total security tokens can ever exist
 -define(SecurityCount, 100).
 
+%% @private
 start_link(SecurityHolders, HNTHolders, L2s) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [SecurityHolders, HNTHolders, L2s], []).
 
+%% @doc Transfer `Amount' HSTs from `Payer' to `Payee'.
 transfer_security(Payer, Payee, Amount) ->
     gen_server:call(?MODULE, {transfer_security, Payer, Payee, Amount}, infinity).
 
+%% @doc Transfer `Amount' HNTs from `Payer' to `Payee'.
 transfer_hnt(Payer, Payee, Amount) ->
     gen_server:call(?MODULE, {transfer_hnt, Payer, Payee, Amount}, infinity).
 
+%% @doc Get HNT balance for `Account'.
+get_hnt_balance(Account) ->
+    gen_server:call(?MODULE, {get_hnt_balance, Account}, infinity).
+
+%% @doc API for SubDAO contracts to update their state with the HNT contract.
 update_from_l2(From, Nonce, NewPower, Burns) ->
     gen_server:call(?MODULE, {update, From, Nonce, NewPower, Burns}).
 
+%% @private
 init([SecurityHolders, HNTHolders, L2s]) ->
     L2Recs = maps:map(
         fun(_K, V) ->
@@ -69,12 +89,17 @@ init([SecurityHolders, HNTHolders, L2s]) ->
 
     {ok, #state{security_holders = SecurityHolders, hnt_holders = HNTHolders, l2s = L2Recs}}.
 
+%% @private
 handle_info(_Any, State) ->
     {noreply, State}.
 
+%% @private
 handle_cast(_Any, State) ->
     {noreply, State}.
 
+%% @private
+handle_call({get_hnt_balance, Account}, _From, State = #state{hnt_holders = HNTHolders}) ->
+    {reply, maps:get(Account, HNTHolders, 0), State};
 handle_call(
     {transfer_security, Payer, Payee, Amount},
     _From,
@@ -113,9 +138,10 @@ handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
             throw({reply, {error, bad_l2_nonce}, State});
         {ok, _} ->
             %% make sure the amount to burn is less than we hold
-            case maps:get(From, State#state.hnt_holders, 0) < Burns of
+            Amt = maps:get(From, State#state.hnt_holders, 0),
+            case Amt < Burns of
                 true ->
-                    throw({reply, {error, overburned}, State});
+                    throw({reply, {error, {overburned, From, Amt, Burns}}, State});
                 false ->
                     ok
             end,

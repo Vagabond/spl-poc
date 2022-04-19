@@ -11,6 +11,8 @@
 
 -export([init/1]).
 
+-include("util.hrl").
+
 -define(SERVER, ?MODULE).
 
 -define(WORKER(I, Mod, Args), #{
@@ -40,14 +42,34 @@ init([]) ->
         intensity => 0,
         period => 1
     },
+
+    %% Each person holds 200000 LWT = 200 HNT
+    %% except vihu and andrew cuz they will stake some validator(s)
+    LWTHolders = #{
+        evan => 200000 * ?STONES_PER_LWT,
+        jay => 200000 * ?STONES_PER_LWT,
+        vihu => 200000 * 100 * ?STONES_PER_LWT,         % 20K HNT equivalent
+        andrew => 200000 * 100 * ?STONES_PER_LWT,       % 20K HNT equivalent
+        amir => 200000 * ?STONES_PER_LWT,
+        hashcode => 200000 * ?STONES_PER_LWT,
+        marc => 200000 * ?STONES_PER_LWT,
+        mark => 200000 * ?STONES_PER_LWT
+    },
+
+    lager:info("LWT Holders (in stones): ~p", [LWTHolders]),
+
+    %% Total backed HNT = 20000 * 8 = 160000 HNT (stored in bones)
+    BackedHNT = maps:fold(fun(_K, V, Acc) -> (V div ?HNT_TO_LWT_RATE) * ?BONES_PER_HNT + Acc end, 0, LWTHolders),
+    lager:info("Total BackedHNT (in bones): ~p", [BackedHNT]),
+
     ChildSpecs = [
         ?WORKER(po, price_oracle, []),
-        ?WORKER(hnt, hnt, [
-            #{kenny => 20, kyle => 80},
-            #{eric => 10, stan => 20},
-            #{lwt => 1000}
+        ?WORKER(hnt_contract, hnt_contract, [
+            #{},
+            #{lwt_contract => BackedHNT},
+            #{lwt_contract => ?HNT_TO_LWT_RATE}
         ]),
-        ?WORKER(lwt, lwt, []),
+        ?WORKER(lwt_contract, lwt_contract, [LWTHolders]),
         ?WORKER(lwt_chain, lwt_chain, [#{tall_blonde_condor => andrew}]),
         ?WORKER(periodic_hotspot, periodic_hotspot, [])
     ],
