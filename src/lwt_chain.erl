@@ -161,13 +161,13 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                                         ),
                                         {HAcc, VAcc};
                                     error ->
-                                        lager:info("Adding validator: ~p, owner: ~p", [
+                                        lager:debug("Adding validator: ~p, owner: ~p", [
                                             ValidatorAddress, Owner
                                         ]),
                                         {HAcc, add_validator(ValidatorAddress, Owner, Height, VAcc)}
                                 end;
                             ({unstake_validator, Owner, ValidatorAddress}, {HAcc, VAcc}) ->
-                                lager:info("Unstake validator: ~p, owner: ~p", [
+                                lager:debug("Unstake validator: ~p, owner: ~p", [
                                     ValidatorAddress,
                                     Owner
                                 ]),

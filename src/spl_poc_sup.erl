@@ -56,11 +56,11 @@ init([]) ->
         mark => 200000 * ?STONES_PER_LWT
     },
 
-    lager:info("LWT Holders (in stones): ~p", [LWTHolders]),
+    lager:debug("LWT Holders (in stones): ~p", [LWTHolders]),
 
     %% Total backed HNT = 20000 * 8 = 160000 HNT (stored in bones)
     BackedHNT = maps:fold(fun(_K, V, Acc) -> (V div ?HNT_TO_LWT_RATE) * ?BONES_PER_HNT + Acc end, 0, LWTHolders),
-    lager:info("Total BackedHNT (in bones): ~p", [BackedHNT]),
+    lager:debug("Total BackedHNT (in bones): ~p", [BackedHNT]),
 
     ChildSpecs = [
         ?WORKER(po, price_oracle, []),

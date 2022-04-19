@@ -193,7 +193,7 @@ handle_call({burn, Burner, Burnee, LWTAmount}, _From, State) ->
     %% then consulting the HNT price oracle.
     HNT = LWTAmount div ?HNT_TO_LWT_RATE,
     DC = util:hnt_to_dc(HNT),
-    lager:info("Burnee: ~p, LWT: ~p, HNT: ~p, DC: ~p", [Burnee, LWTAmount, HNT, DC]),
+    lager:debug("Burnee: ~p, LWT: ~p, HNT: ~p, DC: ~p", [Burnee, LWTAmount, HNT, DC]),
 
     {reply, ok, State#state{
         pending_operations = State#state.pending_operations ++ [{dc, Burnee, DC}],
@@ -207,7 +207,7 @@ handle_call(
     State = #state{nonce = Nonce, pending_operations = Ops}
 ) ->
     lager:debug("LWT got an update msg, Current Holders: ~p", [State#state.holders]),
-    {ok, HNT} = hnt_contract:update_from_l2(?MODULE, Nonce, Power, State#state.burns),
+    {ok, HNT, DCs} = hnt_contract:update_from_l2(?MODULE, Nonce, Power, State#state.burns),
     %% ok, we got some HNT, now we need to convert that to LWT and disburse it according to the reward shares
     LWT = HNT * ?HNT_TO_LWT_RATE,
     TotalShares = maps:fold(
@@ -228,21 +228,21 @@ handle_call(
     lager:debug("New Holders: ~p", [NewHolders0]),
 
     UnstakedValidators = maps:keys(State#state.validators) -- maps:keys(ChainValidators),
-    lager:info("UnstakedValidators: ~p", [UnstakedValidators]),
+    lager:debug("UnstakedValidators: ~p", [UnstakedValidators]),
 
     NewHolders = lists:foldl(
         fun(ValidatorAddress, HAcc) ->
             Owner = maps:get(ValidatorAddress, State#state.validators),
-            lager:info("Crediting owner: ~p for unstaking: ~p", [Owner, ValidatorAddress]),
+            lager:debug("Crediting owner: ~p for unstaking: ~p", [Owner, ValidatorAddress]),
             credit(Owner, ?ValidatorCost, HAcc)
         end,
         NewHolders0,
         UnstakedValidators
     ),
 
-    lager:info("Ops ~p, OpCount ~p", [Ops, OpCount]),
+    lager:debug("Ops ~p, OpCount ~p", [Ops, OpCount]),
     NewPendingOps = lists:sublist(Ops, OpCount + 1, length(Ops)),
-    lager:info("new pending ops ~p", [NewPendingOps]),
+    lager:debug("new pending ops ~p", [NewPendingOps]),
     %% Now we need to remove the first `OpCount' operations from our pending operations stack, zero out our burns
     %% and increment our nonce
     {reply, ok, State#state{
