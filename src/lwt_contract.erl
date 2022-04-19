@@ -25,7 +25,7 @@
 -record(state, {
     nonce = 0,
     holders = #{},
-    %% val_address => {owner, init_height}
+    %% val_address => owner
     validators = #{},
     %% pending amount of HNT that needs to be destroyed
     burns = 0,
@@ -147,7 +147,7 @@ handle_call(
             throw({reply, {error, unknown_validator}, State});
         true ->
             case maps:get(ValidatorAddress, State#state.validators) of
-                {Owner, _} ->
+                Owner ->
                     %% NOTE: At this point
                     %% - This owner is allowed to unstake
                     %% - Add the unstake_validator instruction to pending_operations list
@@ -236,16 +236,9 @@ handle_call(
 
     NewHolders = lists:foldl(
         fun(ValidatorAddress, HAcc) ->
-            {Owner, InitHeight} = maps:get(ValidatorAddress, State#state.validators),
-            %% TODO this is the wrong way to do this, we need to track unstaked validators
-            %% until their unstake height has arrived separately
-            case (InitHeight + ?ValidatorStakingPeriod) > ChainHt of
-                false ->
-                    HAcc;
-                true ->
-                    lager:info("Crediting owner: ~p for unstaking: ~p", [Owner, ValidatorAddress]),
-                    credit(Owner, ?ValidatorCost, HAcc)
-            end
+                Owner = maps:get(ValidatorAddress, State#state.validators),
+                lager:info("Crediting owner: ~p for unstaking: ~p", [Owner, ValidatorAddress]),
+                credit(Owner, ?ValidatorCost, HAcc)
         end,
         NewHolders0,
         UnstakedValidators

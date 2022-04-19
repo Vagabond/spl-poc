@@ -22,8 +22,5 @@
 %% Number of validators to reward
 -define(CGCount, 2).
 
-%% in Blocks
--define(ValidatorStakingPeriod, 50).
-
-%% in Blocks
--define(ValidatorStakeReturnBlocks, 10).
+%% How long it takes to unstake a validator, in Blocks
+-define(ValidatorUnstakeBlocks, 10).

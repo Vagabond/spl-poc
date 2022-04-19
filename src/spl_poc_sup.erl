@@ -64,12 +64,12 @@ init([]) ->
 
     ChildSpecs = [
         ?WORKER(po, price_oracle, []),
-        ?WORKER(hnt, hnt, [
+        ?WORKER(hnt_contract, hnt_contract, [
             #{},
-            #{lwt => BackedHNT},
-            #{lwt => ?HNT_TO_LWT_RATE}
+            #{lwt_contract => BackedHNT},
+            #{lwt_contract => ?HNT_TO_LWT_RATE}
         ]),
-        ?WORKER(lwt, lwt, [LWTHolders]),
+        ?WORKER(lwt_contract, lwt_contract, [LWTHolders]),
         ?WORKER(lwt_chain, lwt_chain, [#{tall_blonde_condor => andrew}]),
         ?WORKER(periodic_hotspot, periodic_hotspot, [])
     ],

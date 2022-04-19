@@ -18,13 +18,20 @@
 
 -export([height/0, state/0]).
 
+-record(validator, {
+          owner,
+          init_height,
+          status = staked :: staked | unstaking | unstaked,
+          unstake_height
+         }).
+
 -record(state, {
     oracles = [],
     %% account => balance
     dc_balances = #{},
     %% address => owner
     hotspots = #{},
-    %% val_address => {owner, init_height}
+    %% val_address => #validator
     validators = #{},
     %% account => reward share
     pending_rewards = #{},
@@ -51,9 +58,16 @@ init([InitialHotspots]) ->
     erlang:send_after(1000, self(), increment_height),
     {ok, #state{hotspots = InitialHotspots}}.
 
-handle_info(increment_height, State = #state{height = Ht}) ->
+handle_info(increment_height, State = #state{height = Ht, validators=Validators}) ->
     erlang:send_after(1000, self(), increment_height),
-    {noreply, State#state{height = Ht + 1}};
+    NewValidators = maps:fold(fun(_Key, #validator{status=unstaking, unstake_height=H}, Acc) when H =< Ht ->
+                      %% remove it
+                      %% XXX this is not how the chain works today, validators are not removed
+                      Acc;
+                 (K, V, Acc) ->
+                      maps:put(K, V, Acc)
+              end, #{}, Validators),
+    {noreply, State#state{height = Ht + 1, validators=NewValidators}};
 handle_info(reward, State = #state{hotspots = Hotspots}) ->
     erlang:send_after(rand:uniform(5000), self(), reward),
     case maps:size(Hotspots) of
@@ -116,7 +130,8 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                         Rewards,
                         Power,
                         Height,
-                        State#state.validators
+                        %% just return the owner, not the whole record
+                        maps:map(fun(_K, #validator{owner=O}) -> O end, State#state.validators)
                     ),
                     lager:debug("Protocol Power (# of hotspots) ~p", [Power]),
                     %% apply the pending operations list
@@ -133,14 +148,14 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                                         {HAcc, VAcc};
                                     error ->
                                         lager:info("Adding validator: ~p, owner: ~p", [ValidatorAddress, Owner]),
-                                        {HAcc, add_validator(ValidatorAddress, {Owner, Height}, VAcc)}
+                                        {HAcc, add_validator(ValidatorAddress, Owner, Height, VAcc)}
                                 end;
                             ({unstake_validator, Owner, ValidatorAddress}, {HAcc, VAcc}) ->
-                                lager:info("Removing validator: ~p, owner: ~p", [
+                                lager:info("Unstake validator: ~p, owner: ~p", [
                                     ValidatorAddress,
                                     Owner
                                 ]),
-                                {HAcc, remove_validator(ValidatorAddress, VAcc)}
+                                {HAcc, unstake_validator(ValidatorAddress, Height, VAcc)}
                         end,
                         {State#state.dc_balances, State#state.validators},
                         ShortestOps
@@ -201,11 +216,11 @@ credit(Key, Amount, Map) ->
 debit(Key, Amount, Map) ->
     maps:update_with(Key, fun(V) -> V - Amount end, Map).
 
-add_validator(Key, Value, Map) ->
-    maps:put(Key, Value, Map).
+add_validator(Key, Owner, Height, Map) ->
+    maps:put(Key, #validator{owner=Owner, init_height=Height}, Map).
 
-remove_validator(Key, Map) ->
-    maps:remove(Key, Map).
+unstake_validator(Key, Height, Map) ->
+    maps:update_with(Key, fun(Validator) -> Validator#validator{status=unstaking, unstake_height=Height+?ValidatorUnstakeBlocks} end, Map).
 
 shuffle(Xs) ->
     [X || {_, X} <- lists:sort([{rand:uniform(), X} || X <- Xs])].
