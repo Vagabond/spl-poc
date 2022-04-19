@@ -151,7 +151,9 @@ handle_call({transfer_hnt, Payer, Payee, Amount}, _From, State = #state{hnt_hold
         _ ->
             {reply, {error, insufficient_balance}, State}
     end;
-handle_call({burn, From, Nonce, Pubkey, Amt}, _From, State = #state{l2s = L2s}) ->
+handle_call(
+    {burn, From, Nonce, Pubkey, Amt}, _From, State = #state{l2s = L2s, hnt_holders = HNTHolders}
+) ->
     case maps:find(From, L2s) of
         error ->
             throw({reply, {error, unknown_l2}, State});
@@ -165,13 +167,17 @@ handle_call({burn, From, Nonce, Pubkey, Amt}, _From, State = #state{l2s = L2s}) 
                     throw({reply, {error, insufficient_hnt_for_burn}, State});
                 true ->
                     PendingDCs = L2Contract#l2.pending_dcs,
+                    NewHNTHolders = debit(Pubkey, Amt, HNTHolders),
                     NewPendingDCs = maps:update_with(
-                        Pubkey, fun(ExistingAmt) -> ExistingAmt + Amt end, Amt, PendingDCs
+                        Pubkey,
+                        fun(ExistingAmt) -> ExistingAmt + Amt end,
+                        Amt,
+                        PendingDCs
                     ),
                     NewL2s = maps:update_with(
                         From, fun(L2) -> L2#l2{pending_dcs = NewPendingDCs} end, L2s
                     ),
-                    {reply, ok, State#state{l2s = NewL2s}}
+                    {reply, ok, State#state{l2s = NewL2s, hnt_holders = NewHNTHolders}}
             end
     end;
 handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->

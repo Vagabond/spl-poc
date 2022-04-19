@@ -207,7 +207,8 @@ handle_call(
     State = #state{nonce = Nonce, pending_operations = Ops}
 ) ->
     lager:debug("LWT got an update msg, Current Holders: ~p", [State#state.holders]),
-    {ok, HNT, DCs} = hnt_contract:update_from_l2(?MODULE, Nonce, Power, State#state.burns),
+    {ok, HNT, BurnHNT} = hnt_contract:update_from_l2(?MODULE, Nonce, Power, State#state.burns),
+
     %% ok, we got some HNT, now we need to convert that to LWT and disburse it according to the reward shares
     LWT = HNT * ?HNT_TO_LWT_RATE,
     TotalShares = maps:fold(
@@ -227,6 +228,18 @@ handle_call(
     ),
     lager:debug("New Holders: ~p", [NewHolders0]),
 
+    %% ok, we may have some HNT for burning to LWT-DC, add this to pending_operations
+    DCBurns = maps:fold(
+        fun(Key, Amount, Acc) ->
+            %% XXX: This conversion may be incorrect
+            LWTDC = util:hnt_to_dc(Amount) * ?HNT_TO_LWT_RATE,
+            [{lwt_dc, Key, LWTDC} | Acc]
+        end,
+        [],
+        BurnHNT
+    ),
+    lager:debug("LWT got some BurnHNT, new dc_burns: ~p", [DCBurns]),
+
     UnstakedValidators = maps:keys(State#state.validators) -- maps:keys(ChainValidators),
     lager:debug("UnstakedValidators: ~p", [UnstakedValidators]),
 
@@ -243,11 +256,12 @@ handle_call(
     lager:debug("Ops ~p, OpCount ~p", [Ops, OpCount]),
     NewPendingOps = lists:sublist(Ops, OpCount + 1, length(Ops)),
     lager:debug("new pending ops ~p", [NewPendingOps]),
+
     %% Now we need to remove the first `OpCount' operations from our pending operations stack, zero out our burns
     %% and increment our nonce
     {reply, ok, State#state{
         nonce = Nonce + 1,
-        pending_operations = NewPendingOps,
+        pending_operations = NewPendingOps ++ DCBurns,
         burns = 0,
         holders = NewHolders,
         chain_ht = ChainHt,

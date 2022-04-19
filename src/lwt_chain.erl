@@ -148,6 +148,9 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                     %% apply the pending operations list
                     {NewHolders, NewValidators} = lists:foldl(
                         fun
+                            ({lwt_dc, Account, Value}, {HAcc, VAcc}) ->
+                                lager:debug("LWTDC Crediting ~p with ~p", [Account, Value]),
+                                {credit(Account, Value, HAcc), VAcc};
                             ({dc, Account, Value}, {HAcc, VAcc}) ->
                                 lager:debug("Crediting ~p with ~p", [Account, Value]),
                                 {credit(Account, Value, HAcc), VAcc};
