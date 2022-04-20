@@ -6,8 +6,6 @@
 
 -module(lwt_chain).
 
-%% this module pretends to be a L2 chain, in this case Helium's chain
-
 -behaviour(gen_server).
 
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3]).
@@ -112,7 +110,7 @@ handle_info(reward, State = #state{hotspots = Hotspots}) ->
             {noreply, State#state{pending_rewards = NewPendingRewards}}
     end;
 handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards, height = Height}) ->
-    lager:debug("Got oracle msg, pending_rewards: ~p", [Rewards]),
+    lager:debug("~p, Got oracle msg, pending_rewards: ~p", [?MODULE, Rewards]),
     erlang:send_after(rand:uniform(5000), self(), oracle),
     {ok, {Nonce, Ops}} = lwt_contract:oracle(),
     %% see if we have 3 oracles with this nonce and we have rewards to do
@@ -149,7 +147,7 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                         %% just return the owner, not the whole record
                         maps:map(fun(_K, #validator{owner = O}) -> O end, State#state.validators)
                     ),
-                    lager:debug("Protocol Power (# of hotspots) ~p", [Power]),
+                    lager:debug("Protocol: ~p, Power (# of devices): ~p", [?MODULE, Power]),
                     %% apply the pending operations list
                     {NewHolders, NewValidators} = lists:foldl(
                         fun

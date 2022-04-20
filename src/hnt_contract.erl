@@ -152,7 +152,9 @@ handle_call({transfer_hnt, Payer, Payee, Amount}, _From, State = #state{hnt_hold
             {reply, {error, insufficient_balance}, State}
     end;
 handle_call(
-    {burn, From, Pubkey, Destination, Amt}, _From, State = #state{l2s = L2s, hnt_holders = HNTHolders}
+    {burn, From, Pubkey, Destination, Amt},
+    _From,
+    State = #state{l2s = L2s, hnt_holders = HNTHolders}
 ) ->
     case maps:find(From, L2s) of
         error ->
@@ -204,9 +206,9 @@ handle_call({update, From, Nonce, NewPower}, _From, State) ->
             %% Note that the burn could actually go back into some pre-mined amount
             %% or could be tracked for "contuining emissions" once HNT is "fully mined"
             NewHNTHolders = credit(
-                    From,
-                    L2#l2.pending_payouts,
-                    NewState0#state.hnt_holders
+                From,
+                L2#l2.pending_payouts,
+                NewState0#state.hnt_holders
             ),
             NewState = NewState0#state{
                 hnt_holders = NewHNTHolders,
