@@ -50,26 +50,36 @@ basic(_Config) ->
     ok = lwt_contract:convert_to_hnt(vihu, ToConvert div 5),
     ok = lwt_contract:convert_to_hnt(andrew, ToConvert div 2),
 
-    %% Wait 1 sec
-    timer:sleep(1*1000),
+    %% Wait 2 sec (for 2 blocks...)
+    timer:sleep(2 * 1000),
 
     ?assertEqual(ToConvert div 5 div ?HNT_TO_LWT_RATE, hnt_contract:get_hnt_balance(vihu)),
     ?assertEqual(ToConvert div 2 div ?HNT_TO_LWT_RATE, hnt_contract:get_hnt_balance(andrew)),
 
     %% TODO: Add more checks around total LWT in circulation...
 
-    lager:info("lwt_chain state: ~p", [lwt_chain:state()]),
-
-
     HNTTOBurn = 500000000,
 
     %% Burn some HNT for LWT-DC
-    ok = hnt_contract:burn_into_l2(lwt_contract, maps:get(nonce, element(2, lwt_contract:state())), vihu, HNTTOBurn div 20),
-    ok = hnt_contract:burn_into_l2(lwt_contract, maps:get(nonce, element(2, lwt_contract:state())), andrew, HNTTOBurn div 10),
+    ok = hnt_contract:burn_into_l2(
+        lwt_contract, maps:get(nonce, element(2, lwt_contract:state())), vihu, HNTTOBurn div 20
+    ),
+    ok = hnt_contract:burn_into_l2(
+        lwt_contract, maps:get(nonce, element(2, lwt_contract:state())), andrew, HNTTOBurn div 10
+    ),
 
-    %% Wait 30 secs
-    timer:sleep(30*1000),
+    %% Wait 30 secs (just to have the burn clear...)
+    timer:sleep(30 * 1000),
 
-    lager:info("lwt_chain state: ~p", [lwt_chain:state()]),
+    %% Vihu and andrew may get DCs from other sources, BUT, after the HNT burn,
+    %% their eventual DC balances must be greater than the expected amounts
+    ExpectedMinVihuLWTDC = util:hnt_to_dc(HNTTOBurn div 20) * ?HNT_TO_LWT_RATE,
+    ExpectedMinAndrewLWTDC = util:hnt_to_dc(HNTTOBurn div 10) * ?HNT_TO_LWT_RATE,
+
+    NewVihuDCBalance = lwt_chain:get_dc_balance(vihu),
+    NewAndrewDCBalance = lwt_chain:get_dc_balance(andrew),
+
+    ?assert(NewVihuDCBalance >= ExpectedMinVihuLWTDC),
+    ?assert(NewAndrewDCBalance >= ExpectedMinAndrewLWTDC),
 
     ok.

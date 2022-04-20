@@ -18,6 +18,8 @@
 
 -export([height/0, state/0]).
 
+-export([get_dc_balance/1]).
+
 -record(validator, {
     %% validator owner pubkey
     owner,
@@ -50,6 +52,9 @@ height() ->
 
 state() ->
     gen_server:call(?MODULE, state, infinity).
+
+get_dc_balance(Pubkey) ->
+    gen_server:call(?MODULE, {get_dc_balance, Pubkey}, infinity).
 
 add_hotspot(Payer, HotspotAddress) ->
     gen_server:call(?MODULE, {add_hotspot, Payer, HotspotAddress}, infinity).
@@ -216,6 +221,8 @@ handle_call(
         height => Ht
     },
     {reply, {ok, Reply}, State};
+handle_call({get_dc_balance, Pubkey}, _From, State = #state{dc_balances = DCBalances}) ->
+    {reply, maps:get(Pubkey, DCBalances, 0), State};
 handle_call(height, _From, State = #state{height = Ht}) ->
     {reply, {ok, Ht}, State};
 handle_call({add_hotspot, Owner, HotspotAddress}, _From, State = #state{dc_balances = DCs}) ->
