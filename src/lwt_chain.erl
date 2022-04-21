@@ -18,6 +18,8 @@
 
 -export([height/0, state/0]).
 
+-export([get_dc_balance/1]).
+
 -record(validator, {
     %% validator owner pubkey
     owner,
@@ -50,6 +52,9 @@ height() ->
 
 state() ->
     gen_server:call(?MODULE, state, infinity).
+
+get_dc_balance(Pubkey) ->
+    gen_server:call(?MODULE, {get_dc_balance, Pubkey}, infinity).
 
 add_hotspot(Payer, HotspotAddress) ->
     gen_server:call(?MODULE, {add_hotspot, Payer, HotspotAddress}, infinity).
@@ -148,6 +153,9 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                     %% apply the pending operations list
                     {NewHolders, NewValidators} = lists:foldl(
                         fun
+                            ({lwt_dc, Account, Value}, {HAcc, VAcc}) ->
+                                lager:debug("LWTDC Crediting ~p with ~p", [Account, Value]),
+                                {credit(Account, Value, HAcc), VAcc};
                             ({dc, Account, Value}, {HAcc, VAcc}) ->
                                 lager:debug("Crediting ~p with ~p", [Account, Value]),
                                 {credit(Account, Value, HAcc), VAcc};
@@ -161,13 +169,13 @@ handle_info(oracle, State = #state{oracles = Oracles0, pending_rewards = Rewards
                                         ),
                                         {HAcc, VAcc};
                                     error ->
-                                        lager:info("Adding validator: ~p, owner: ~p", [
+                                        lager:debug("Adding validator: ~p, owner: ~p", [
                                             ValidatorAddress, Owner
                                         ]),
                                         {HAcc, add_validator(ValidatorAddress, Owner, Height, VAcc)}
                                 end;
                             ({unstake_validator, Owner, ValidatorAddress}, {HAcc, VAcc}) ->
-                                lager:info("Unstake validator: ~p, owner: ~p", [
+                                lager:debug("Unstake validator: ~p, owner: ~p", [
                                     ValidatorAddress,
                                     Owner
                                 ]),
@@ -213,6 +221,8 @@ handle_call(
         height => Ht
     },
     {reply, {ok, Reply}, State};
+handle_call({get_dc_balance, Pubkey}, _From, State = #state{dc_balances = DCBalances}) ->
+    {reply, maps:get(Pubkey, DCBalances, 0), State};
 handle_call(height, _From, State = #state{height = Ht}) ->
     {reply, {ok, Ht}, State};
 handle_call({add_hotspot, Owner, HotspotAddress}, _From, State = #state{dc_balances = DCs}) ->
