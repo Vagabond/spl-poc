@@ -40,9 +40,12 @@ end_per_testcase(_, _Config) ->
 %%--------------------------------------------------------------------
 
 basic(_Config) ->
-    %% Starting with 0 hnt
-    0 = hnt_contract:get_hnt_balance(vihu),
-    0 = hnt_contract:get_hnt_balance(andrew),
+
+    StartingHNT = 175000,
+
+    %% Starting with 175000 hnt
+    StartingHNT = hnt_contract:get_hnt_balance(vihu),
+    StartingHNT = hnt_contract:get_hnt_balance(andrew),
 
     %% Convert some LWT to HNT
     ToConvert = 1000000000000,
@@ -53,8 +56,8 @@ basic(_Config) ->
     %% Wait 2 sec (for 2 blocks...)
     timer:sleep(2 * 1000),
 
-    ?assertEqual(ToConvert div 5 div ?HNT_TO_LWT_RATE, hnt_contract:get_hnt_balance(vihu)),
-    ?assertEqual(ToConvert div 2 div ?HNT_TO_LWT_RATE, hnt_contract:get_hnt_balance(andrew)),
+    ?assertEqual(ToConvert div 5 div ?HNT_TO_LWT_RATE + StartingHNT, hnt_contract:get_hnt_balance(vihu)),
+    ?assertEqual(ToConvert div 2 div ?HNT_TO_LWT_RATE + StartingHNT, hnt_contract:get_hnt_balance(andrew)),
 
     %% TODO: Add more checks around total LWT in circulation...
 
@@ -62,10 +65,10 @@ basic(_Config) ->
 
     %% Burn some HNT for LWT-DC
     ok = hnt_contract:burn_into_l2(
-        lwt_contract, maps:get(nonce, element(2, lwt_contract:state())), vihu, HNTTOBurn div 20
+        lwt_contract, vihu, vihu, HNTTOBurn div 20
     ),
     ok = hnt_contract:burn_into_l2(
-        lwt_contract, maps:get(nonce, element(2, lwt_contract:state())), andrew, HNTTOBurn div 10
+        lwt_contract, andrew, andrew, HNTTOBurn div 10
     ),
 
     %% Wait 30 secs (just to have the burn clear...)
@@ -73,12 +76,13 @@ basic(_Config) ->
 
     %% Vihu and andrew may get DCs from other sources, BUT, after the HNT burn,
     %% their eventual DC balances must be greater than the expected amounts
-    ExpectedMinVihuLWTDC = util:hnt_to_dc(HNTTOBurn div 20) * ?HNT_TO_LWT_RATE,
-    ExpectedMinAndrewLWTDC = util:hnt_to_dc(HNTTOBurn div 10) * ?HNT_TO_LWT_RATE,
+    ExpectedMinVihuLWTDC = util:hnt_to_dc(HNTTOBurn div 20),
+    ExpectedMinAndrewLWTDC = util:hnt_to_dc(HNTTOBurn div 10),
 
     NewVihuDCBalance = lwt_chain:get_dc_balance(vihu),
     NewAndrewDCBalance = lwt_chain:get_dc_balance(andrew),
 
+    ct:pal("vihu ~p andrew ~p", [NewVihuDCBalance, NewAndrewDCBalance]),
     ?assert(NewVihuDCBalance >= ExpectedMinVihuLWTDC),
     ?assert(NewAndrewDCBalance >= ExpectedMinAndrewLWTDC),
 

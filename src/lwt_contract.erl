@@ -27,8 +27,6 @@
     holders = #{},
     %% val_address => owner
     validators = #{},
-    %% pending amount of HNT that needs to be destroyed
-    burns = 0,
     %% some stack of pending operations we need to do to the l2
     pending_operations = [],
     chain_ht = 0
@@ -38,7 +36,7 @@
 
 -export([start_link/1]).
 
--export([transfer/3, convert_to_hnt/2, burn_to_dc/3]).
+-export([transfer/3, convert_to_hnt/2]).
 
 -export([oracle/0, update_from_chain/6]).
 
@@ -63,12 +61,6 @@ convert_to_hnt(Payer, Amount) ->
     %% essentially we destroy some LWT and then send some of the HNT this contract
     %% controls to the Payer's address via the hnt contract api
     gen_server:call(?MODULE, {convert, Payer, Amount}, infinity).
-
-%% @doc Burn `Amount' of `Payer''s LWTs into LWT-DCs in favor of `Payee'.
-burn_to_dc(Burner, Burnee, Amount) ->
-    %% destroy LWT and mark the equivalent amount of HNT to be burned next time we
-    %% send an update to the hnt contract
-    gen_server:call(?MODULE, {burn, Burner, Burnee, Amount}, infinity).
 
 %% @doc Function to get the state of the LWT contract.
 oracle() ->
@@ -182,23 +174,6 @@ handle_call({convert, Payer, Amount}, _From, State) ->
     %% module is a lazy identifier for this contract, would be a pubkey normally
     ok = hnt_contract:transfer_hnt(?MODULE, Payer, Amount div ?HNT_TO_LWT_RATE),
     {reply, ok, State#state{holders = NewHolders}};
-handle_call({burn, Burner, Burnee, LWTAmount}, _From, State) ->
-    case maps:get(Burner, State#state.holders, 0) >= LWTAmount of
-        false ->
-            throw({reply, {error, insufficient_balance}, State});
-        true ->
-            ok
-    end,
-    %% calculate the amount of DC this LWT is worth by converting LWT to HNT and
-    %% then consulting the HNT price oracle.
-    HNT = LWTAmount div ?HNT_TO_LWT_RATE,
-    DC = util:hnt_to_dc(HNT),
-    lager:debug("Burnee: ~p, LWT: ~p, HNT: ~p, DC: ~p", [Burnee, LWTAmount, HNT, DC]),
-
-    {reply, ok, State#state{
-        pending_operations = State#state.pending_operations ++ [{dc, Burnee, DC}],
-        burns = State#state.burns + HNT
-    }};
 handle_call(oracle, _From, State) ->
     {reply, {ok, {State#state.nonce, State#state.pending_operations}}, State};
 handle_call(
@@ -207,7 +182,7 @@ handle_call(
     State = #state{nonce = Nonce, pending_operations = Ops}
 ) ->
     lager:debug("LWT got an update msg, Current Holders: ~p", [State#state.holders]),
-    {ok, HNT, BurnHNT} = hnt_contract:update_from_l2(?MODULE, Nonce, Power, State#state.burns),
+    {ok, HNT, BurnHNT} = hnt_contract:update_from_l2(?MODULE, Nonce, Power),
 
     %% ok, we got some HNT, now we need to convert that to LWT and disburse it according to the reward shares
     LWT = HNT * ?HNT_TO_LWT_RATE,
@@ -238,7 +213,7 @@ handle_call(
         [],
         BurnHNT
     ),
-    lager:debug("LWT got some BurnHNT, new dc_burns: ~p", [DCBurns]),
+    lager:debug("New dc_burns: ~p", [DCBurns]),
 
     UnstakedValidators = maps:keys(State#state.validators) -- maps:keys(ChainValidators),
     lager:debug("UnstakedValidators: ~p", [UnstakedValidators]),
@@ -262,7 +237,6 @@ handle_call(
     {reply, ok, State#state{
         nonce = Nonce + 1,
         pending_operations = NewPendingOps ++ DCBurns,
-        burns = 0,
         holders = NewHolders,
         chain_ht = ChainHt,
         validators = ChainValidators

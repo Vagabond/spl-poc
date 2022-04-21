@@ -50,7 +50,7 @@
 ]).
 
 -export([
-    update_from_l2/4,
+    update_from_l2/3,
     burn_into_l2/4
 ]).
 
@@ -84,12 +84,12 @@ get_hnt_balance(Account) ->
     gen_server:call(?MODULE, {get_hnt_balance, Account}, infinity).
 
 %% @doc API for SubDAO contracts to update their state with the HNT contract.
-update_from_l2(From, Nonce, NewPower, Burns) ->
-    gen_server:call(?MODULE, {update, From, Nonce, NewPower, Burns}).
+update_from_l2(From, Nonce, NewPower) ->
+    gen_server:call(?MODULE, {update, From, Nonce, NewPower}).
 
 %% @doc API for SubDAO contracts to burn HNT to get equivalent L2-DC
-burn_into_l2(From, Nonce, Pubkey, Amt) ->
-    gen_server:call(?MODULE, {burn, From, Nonce, Pubkey, Amt}).
+burn_into_l2(L2, Pubkey, Destination, Amt) ->
+    gen_server:call(?MODULE, {burn, L2, Pubkey, Destination, Amt}).
 
 %% @private
 init([SecurityHolders, HNTHolders, L2s]) ->
@@ -152,13 +152,11 @@ handle_call({transfer_hnt, Payer, Payee, Amount}, _From, State = #state{hnt_hold
             {reply, {error, insufficient_balance}, State}
     end;
 handle_call(
-    {burn, From, Nonce, Pubkey, Amt}, _From, State = #state{l2s = L2s, hnt_holders = HNTHolders}
+    {burn, From, Pubkey, Destination, Amt}, _From, State = #state{l2s = L2s, hnt_holders = HNTHolders}
 ) ->
     case maps:find(From, L2s) of
         error ->
             throw({reply, {error, unknown_l2}, State});
-        {ok, #l2{nonce = N}} when Nonce /= N ->
-            throw({reply, {error, bad_l2_nonce}, State});
         {ok, L2Contract} ->
             %% Make sure that the owner has the HNT being burned to L2-DC
             HNTHeld = maps:get(Pubkey, State#state.hnt_holders, 0),
@@ -169,7 +167,7 @@ handle_call(
                     PendingDCs = L2Contract#l2.pending_dcs,
                     NewHNTHolders = debit(Pubkey, Amt, HNTHolders),
                     NewPendingDCs = maps:update_with(
-                        Pubkey,
+                        Destination,
                         fun(ExistingAmt) -> ExistingAmt + Amt end,
                         Amt,
                         PendingDCs
@@ -180,13 +178,12 @@ handle_call(
                     {reply, ok, State#state{l2s = NewL2s, hnt_holders = NewHNTHolders}}
             end
     end;
-handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
+handle_call({update, From, Nonce, NewPower}, _From, State) ->
     %% so we have to do a bunch of stuff here
     %% * we have to compute how long it's been since the last
     %%   update from this l2 to understand how many HNT we are dealing with
     %% * We have to compute the rewards split
     %% * We have to credit that # of hnt to the l2 contract addresses
-    %% * We have to do any HNT burns
     %% * We have to pay out security token dividends
     %% * Update the protocol power and the update times, etc
     %% * Return the HNT disbursed as the result
@@ -197,14 +194,6 @@ handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
         {ok, #l2{nonce = N}} when Nonce /= N ->
             throw({reply, {error, bad_l2_nonce}, State});
         {ok, _} ->
-            %% make sure the amount to burn is less than we hold
-            Amt = maps:get(From, State#state.hnt_holders, 0),
-            case Amt < Burns of
-                true ->
-                    throw({reply, {error, {overburned, From, Amt, Burns}}, State});
-                false ->
-                    ok
-            end,
             Now = erlang:monotonic_time(millisecond),
             Elapsed = Now - State#state.last_update,
             NewState0 = emit(Elapsed, State),
@@ -214,14 +203,10 @@ handle_call({update, From, Nonce, NewPower, Burns}, _From, State) ->
             %% apply the payments and the burns to the l2 contract's address
             %% Note that the burn could actually go back into some pre-mined amount
             %% or could be tracked for "contuining emissions" once HNT is "fully mined"
-            NewHNTHolders = debit(
-                From,
-                Burns,
-                credit(
+            NewHNTHolders = credit(
                     From,
                     L2#l2.pending_payouts,
                     NewState0#state.hnt_holders
-                )
             ),
             NewState = NewState0#state{
                 hnt_holders = NewHNTHolders,

@@ -23,8 +23,6 @@
 
 -export([start_link/0]).
 
--include("util.hrl").
-
 -define(owners, [vihu, andrew, amir, hashcode, marc, mark]).
 
 start_link() ->
@@ -33,11 +31,17 @@ start_link() ->
 -record(state, {}).
 
 init([]) ->
-    %% Burn 5000 LWT = 5 HNT = $125 for each owner
-    %% for being able to add hotspots
+    %% In order to be able to add hotspots to LWT chain,
+    %% holders of LWT must convert to HNT and then burn
+    %% that HNT to LWT DC.
+    %% - Convert 200000000 LWT to HNT
+    %% - Burn 50000 HNT to get LWT DC
+    LWTToConvert = 20000000000 div 100,
+    HNTToBurn = 500000 div 20,
     ok = lists:foreach(
         fun(Owner) ->
-            ok = lwt_contract:burn_to_dc(Owner, Owner, 5 * ?HNT_TO_LWT_RATE)
+            ok = lwt_contract:convert_to_hnt(Owner, LWTToConvert),
+            ok = hnt_contract:burn_into_l2(lwt_contract, Owner, Owner, HNTToBurn)
         end,
         ?owners
     ),
