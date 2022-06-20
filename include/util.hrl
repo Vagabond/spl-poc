@@ -24,3 +24,13 @@
 
 %% How long it takes to unstake a validator, in Blocks
 -define(ValidatorUnstakeBlocks, 10).
+
+
+%% HNT to 5GT, does not change
+-define(HNT_TO_5GT_RATE, 100).
+
+%% 5GT satoshis
+-define(TONES_PER_5GT, ?BONES_PER_HNT div ?HNT_TO_5GT_RATE).
+
+%% in 5G-DC
+-define(FiveGDeviceAddFee, 100 * ?USD_TO_DC).

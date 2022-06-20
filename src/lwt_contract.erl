@@ -9,8 +9,6 @@
 %%
 %% - Staked validator information
 %%
-%% - How much HNT needs to be burned next time the HNT contract is updated
-%%
 %% - Pending operations for the LWT chain
 %%
 %% @end
